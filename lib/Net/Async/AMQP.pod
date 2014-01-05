@@ -1,0 +1,382 @@
+=for comment POD_DERIVED_INDEX_GENERATED
+The following documentation is automatically generated.  Please do not edit
+this file, but rather the original, inline with Net::Async::AMQP
+at lib/Net/Async/AMQP.pm
+(on the system that originally ran this).
+If you do edit this file, and don't want your changes to be removed, make
+sure you change the first line.
+
+=cut
+
+=head1 NAME
+
+Net::Async::AMQP - provides client interface to AMQP using L<IO::Async>
+
+=head1 VERSION
+
+version 0.001
+
+=head1 SYNOPSIS
+
+ use IO::Async::Loop;
+ use Net::Async::AMQP;
+ my $amqp = Net::Async::AMQP->new(loop => my $loop = IO::Async::Loop->new);
+ $amqp->connect(
+   host => 'localhost',
+   user => 'guest',
+   pass => 'guest',
+   on_connected => sub { ... }
+ );
+ $loop->run;
+
+=head1 DESCRIPTION
+
+Does AMQP things. Note that the API may change before the stable 1.000
+release - L</SEE ALSO> has some alternative modules if you're looking for
+something that has been around for longer.
+
+=head1 CONSTANTS
+
+=head2 AUTH_MECH
+
+Defines the mechanism used for authentication. Currently only AMQPLAIN
+is supported.
+
+=head2 PAYLOAD_HEADER_LENGTH
+
+Length of header used in payload messages. Defined by the AMQP standard.
+
+=head2 MAX_FRAME_SIZE
+
+Largest amount of data we'll attempt to send in a single frame. Actual
+frame limit will be negotiated with the remote server.
+
+=head2 DEBUG
+
+Debugging flag - set C<PERL_AMQP_DEBUG> to 1 in the environment to enable
+informational messages to STDERR.
+
+=head2 HEARTBEAT_INTERVAL
+
+Interval in seconds between heartbeat frames, zero to disable. Can be
+overridden by C<PERL_AMQP_HEARTBEAT_INTERVAL> in the environment, default
+is 60s.
+
+=head1 PACKAGE VARIABLES
+
+=head2 $XML_SPEC
+
+This defines the path to the AMQP XML spec, which L<Net::AMQP> uses
+to create methods and handlers for the appropriate version of the MQ
+protocol.
+
+Defaults to an extended version of the 0.9.1 protocol as used by RabbitMQ,
+this is found in the C<amqp0-9-1.extended.xml> distribution sharedir (see
+L<File::ShareDir>).
+
+=head1 METHODS
+
+=head2 new
+
+Constructor. Takes the following parameters:
+
+=over 4
+
+=item * loop - the L<IO::Async::Loop> which we should add ourselves to
+
+=item * heartbeat_interval - (optional) interval between heartbeat messages,
+default is set by the L</HEARTBEAT_INTERVAL> constant
+
+=back
+
+Returns $self.
+
+=head2 connect
+
+Takes the following parameters:
+
+=over 4
+
+=item * port - the AMQP port, defaults to 5672, can be a service name if preferred
+
+=item * host - host to connect to, defaults to localhost
+
+=item * local_host - our local IP to connect from
+
+=item * user - which user to connect as, defaults to guest
+
+=item * pass - the password for this user, defaults to guest
+
+=item * on_connected - callback for when we establish a connection
+
+=item * on_error - callback for any errors encountered during connection
+
+=back
+
+Returns $self.
+
+=head2 handle_heartbeat_failure
+
+Called when heartbeats are enabled and we've had no response from the server for 3 heartbeat
+intervals. We'd expect some frame from the remote - even if just a heartbeat frame - at least
+once every heartbeat interval so if this triggers then we're likely dealing with a dead or
+heavily loaded server.
+
+This will invoke the L</heartbeat_failure event> then close the connection.
+
+=head2 send_heartbeat
+
+Sends the heartbeat frame.
+
+=head2 post_connect
+
+Sends initial startup header and applies listener for the Connection::Start message.
+
+Returns $self.
+
+=head2 setup_tuning
+
+Applies listener for the Connection::Tune message, used for determining max frame size and heartbeat settings.
+
+Returns $self.
+
+=head2 open_connection
+
+Establish a new connection to a vhost - this is called after tuning is complete,
+and must happen before any channel connections are attempted.
+
+Returns $self.
+
+=head2 setup_connection
+
+Applies listener for the Connection::OpenOk message, which triggers the
+C<connected> event.
+
+Returns $self.
+
+=head2 next_channel
+
+Returns the next available channel ready for L</open_channel>.
+Note that whatever it reports will be completely wrong if you've
+manually specified a channel anywhere, so don't do that.
+
+=head2 open_channel
+
+Opens a new channel.
+
+Returns the new L<Net::Async::AMQP::Channel> instance.
+
+=head2 close
+
+Close the connection.
+
+Returns a L<Future> which will resolve with C<$self> when the connection is closed.
+
+=head2 next_pending
+
+Retrieves the next pending handler for the given incoming frame type (see L</get_frame_type>),
+and calls it.
+
+Takes the following parameters:
+
+=over 4
+
+=item * $type - the frame type, such as 'Basic::ConnectOk'
+
+=item * $frame - the frame itself
+
+=back
+
+Returns $self.
+
+=head1 METHODS - Accessors
+
+=head2 loop
+
+L<IO::Async::Loop> container.
+
+=head2 frame_max
+
+Maximum number of bytes allowed in any given frame.
+
+=head2 last_frame_time
+
+Timestamp of the last frame we received from
+the remote. Used for handling heartbeats.
+
+=head2 stream
+
+Returns the current L<IO::Async::Stream> for the AMQP connection.
+
+=head2 incoming_message
+
+L<Future> for the current incoming message (received in two or more parts:
+the header then all body chunks).
+
+=head1 METHODS - Internal
+
+The following methods are intended for internal use. They are documented
+for completeness but should not normally be needed outside this library.
+
+=head2 push_pending
+
+Adds the given handler(s) to the pending handler list for the given type(s).
+
+Takes one or more of the following parameter pairs:
+
+=over 4
+
+=item * $type - the frame type, see L</get_frame_type>
+
+=item * $code - the coderef to call, will be invoked once as follows when a matching frame is received:
+
+ $code->($self, $frame, @_)
+
+=back
+
+Returns C< $self >.
+
+=head2 remove_pending
+
+Removes a coderef from the pending event handler.
+
+Returns C< $self >.
+
+=head2 write
+
+Writes data to the server.
+
+=head2 get_frame_type
+
+Takes the following parameters:
+
+=over 4
+
+=item * $frame - the L<Net::AMQP::Frame> instance
+
+=back
+
+Returns string representing type, typically the base class with Net::AMQP::Protocol prefix removed.
+
+=head2 process_frame
+
+Process a single incoming frame.
+
+Takes the following parameters:
+
+=over 4
+
+=item * $frame - the L<Net::AMQP::Frame> instance
+
+=back
+
+Returns $self.
+
+=head2 split_payload
+
+Splits a message into separate frames.
+
+Takes the $payload as a scalar containing byte data, and the following parameters:
+
+=over 4
+
+=item * exchange - where we're sending the message
+
+=item * routing_key - other part of message destination
+
+=back
+
+Returns list of frames suitable for passing to L</send_frame>.
+
+=head2 send_frame
+
+Send a single frame.
+
+Takes the $frame instance followed by these optional named parameters:
+
+=over 4
+
+=item * channel - which channel we should send on
+
+=back
+
+Returns $self.
+
+=head2 reset_heartbeat
+
+Resets our side of the heartbeat timer.
+
+This is used to ensure we send data at least once every L</heartbeat_interval>
+seconds.
+
+=head1 EVENTS
+
+The following events may be raised by this class - use
+L<Mixin::Event::Dispatch/subscribe_to_event> to watch for them:
+
+ $mq->subscribe_to_event(
+   heartbeat_failure => sub {
+     my ($ev, $last) = @_;
+	 print "Heartbeat failure detected\n";
+   }
+ );
+
+=head2 connected event
+
+Called after the connection has been opened.
+
+=head2 close event
+
+Called after the remote has closed the connection.
+
+=head2 heartbeat_failure event
+
+Raised if we receive no data from the remote for more than 3 heartbeat intervals and heartbeats are enabled,
+
+=head2 unexpected_frame event
+
+If we receive an unsolicited frame from the server this event will be raised:
+
+ $mq->subscribe_to_event(
+  unexpected_frame => sub {
+   my ($ev, $type, $frame) = @_;
+   warn "Frame type $type received: $frame\n";
+  }
+ )
+
+=head1 SEE ALSO
+
+=over 4
+
+=item * L<Net::AMQP> - this does all the hard work of converting the XML protocol
+specification into appropriate Perl methods and classes.
+
+=item * L<Net::AMQP::RabbitMQ> - librabbitmq support
+
+=item * L<POE::Component::Client::AMQP> - POE equivalent of this module
+
+=item * L<AnyEvent::RabbitMQ>
+
+=back
+
+=head1 INHERITED METHODS
+
+=over 4
+
+=item L<Mixin::Event::Dispatch>
+
+L<add_handler_for_event|Mixin::Event::Dispatch/add_handler_for_event>, L<clear_event_handlers|Mixin::Event::Dispatch/clear_event_handlers>, L<event_handlers|Mixin::Event::Dispatch/event_handlers>, L<invoke_event|Mixin::Event::Dispatch/invoke_event>, L<subscribe_to_event|Mixin::Event::Dispatch/subscribe_to_event>, L<unsubscribe_from_event|Mixin::Event::Dispatch/unsubscribe_from_event>
+
+=back
+
+=head1 AUTHOR
+
+Tom Molesworth <cpan@entitymodel.com>
+
+=head1 LICENSE
+
+Licensed under the same terms as Perl itself, with additional licensing
+terms for the MQ spec to be found in C<share/amqp0-9-1.extended.xml>
+('a worldwide, perpetual, royalty-free, nontransferable, nonexclusive
+license to (i) copy, display, distribute and implement the Advanced
+Messaging Queue Protocol ("AMQP") Specification').

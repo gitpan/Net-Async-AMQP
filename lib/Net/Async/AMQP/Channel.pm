@@ -1,7 +1,5 @@
 package Net::Async::AMQP::Channel;
-{
-  $Net::Async::AMQP::Channel::VERSION = '0.001';
-}
+$Net::Async::AMQP::Channel::VERSION = '0.002';
 use strict;
 use warnings;
 use parent qw(Mixin::Event::Dispatch);
@@ -12,7 +10,7 @@ Net::Async::AMQP::Channel - represents a single channel in an MQ connection
 
 =head1 VERSION
 
-version 0.001
+version 0.002
 
 =head1 SYNOPSIS
 
@@ -118,10 +116,10 @@ sub exchange_declare {
         method_frame => Net::AMQP::Protocol::Exchange::Declare->new(
             exchange    => $args{exchange},
             type        => $args{type},
-            passive     => 0,
-            durable     => 0,
+            passive     => $args{passive} || 0,
+            durable     => $args{durable} || 0,
             auto_delete => $args{auto_delete} || 0,
-            internal    => 0,
+            internal    => $args{internal} || 0,
             ticket      => 0,
             nowait      => 0,
         )
@@ -169,11 +167,15 @@ sub queue_declare {
             channel => $self->id,
             method_frame => Net::AMQP::Protocol::Queue::Declare->new(
                 queue       => $args{queue},
-                passive     => 0,
-                durable     => 0,
-                exclusive   => 0,
-                auto_delete => 0,
-                no_ack      => 0,
+                passive     => $args{passive} || 0,
+                durable     => $args{durable} || 0,
+                exclusive   => $args{exclusive} || 0,
+                auto_delete => $args{auto_delete} || 0,
+                no_ack      => $args{no_ack} || 0,
+				($args{arguments}
+				? (arguments   => $args{arguments})
+				: ()
+				),
                 ticket      => 0,
                 nowait      => 0,
             )

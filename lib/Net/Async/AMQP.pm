@@ -5,7 +5,7 @@ use warnings;
 use parent qw(Mixin::Event::Dispatch);
 use constant EVENT_DISPATCH_ON_FALLBACK => 0;
 
-our $VERSION = '0.001';
+our $VERSION = '0.002';
 
 =head1 NAME
 
@@ -13,7 +13,7 @@ Net::Async::AMQP - provides client interface to AMQP using L<IO::Async>
 
 =head1 VERSION
 
-version 0.001
+version 0.002
 
 =head1 SYNOPSIS
 

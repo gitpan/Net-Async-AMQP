@@ -4,7 +4,7 @@
       "Tom Molesworth <cpan@entitymodel.com>"
    ],
    "dynamic_config" : 0,
-   "generated_by" : "Dist::Zilla version 5.008, CPAN::Meta::Converter version 2.133380",
+   "generated_by" : "Dist::Zilla version 5.013, CPAN::Meta::Converter version 2.133380",
    "license" : [
       "perl_5"
    ],
@@ -65,6 +65,6 @@
       },
       "homepage" : "http://search.cpan.org/dist/Net-Async-AMQP/"
    },
-   "version" : "0.001"
+   "version" : "0.002"
 }
 

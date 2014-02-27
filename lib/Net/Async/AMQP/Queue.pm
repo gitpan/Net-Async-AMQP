@@ -1,5 +1,5 @@
 package Net::Async::AMQP::Queue;
-$Net::Async::AMQP::Queue::VERSION = '0.002';
+$Net::Async::AMQP::Queue::VERSION = '0.003';
 use strict;
 use warnings;
 use parent qw(Mixin::Event::Dispatch);
@@ -10,7 +10,7 @@ Net::Async::AMQP - provides client interface to AMQP using L<IO::Async>
 
 =head1 VERSION
 
-version 0.002
+version 0.003
 
 =head1 SYNOPSIS
 

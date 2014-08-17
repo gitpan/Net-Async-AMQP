@@ -6,6 +6,8 @@ at lib/Net/Async/AMQP/Channel.pm
 If you do edit this file, and don't want your changes to be removed, make
 sure you change the first line.
 
+=encoding utf8
+
 =cut
 
 =head1 NAME
@@ -14,7 +16,7 @@ Net::Async::AMQP::Channel - represents a single channel in an MQ connection
 
 =head1 VERSION
 
-version 0.003
+Version 0.004
 
 =head1 SYNOPSIS
 
@@ -139,9 +141,9 @@ channel instance once the operation is complete.
 
 The parent L<Net::Async::AMQP> instance.
 
-=head2 loop
+=head2 bus
 
-Our containing L<IO::Async::Loop> instance.
+Event bus. Used for sharing channel-specific events.
 
 =head2 write
 
@@ -161,9 +163,9 @@ This channel ID.
 
 =over 4
 
-=item L<Mixin::Event::Dispatch>
+=item L<IO::Async::Notifier>
 
-L<add_handler_for_event|Mixin::Event::Dispatch/add_handler_for_event>, L<clear_event_handlers|Mixin::Event::Dispatch/clear_event_handlers>, L<event_handlers|Mixin::Event::Dispatch/event_handlers>, L<invoke_event|Mixin::Event::Dispatch/invoke_event>, L<subscribe_to_event|Mixin::Event::Dispatch/subscribe_to_event>, L<unsubscribe_from_event|Mixin::Event::Dispatch/unsubscribe_from_event>
+L<add_child|IO::Async::Notifier/add_child>, L<adopt_future|IO::Async::Notifier/adopt_future>, L<can_event|IO::Async::Notifier/can_event>, L<children|IO::Async::Notifier/children>, L<configure_unknown|IO::Async::Notifier/configure_unknown>, L<debug_printf|IO::Async::Notifier/debug_printf>, L<get_loop|IO::Async::Notifier/get_loop>, L<invoke_error|IO::Async::Notifier/invoke_error>, L<invoke_event|IO::Async::Notifier/invoke_event>, L<loop|IO::Async::Notifier/loop>, L<make_event_cb|IO::Async::Notifier/make_event_cb>, L<maybe_invoke_event|IO::Async::Notifier/maybe_invoke_event>, L<maybe_make_event_cb|IO::Async::Notifier/maybe_make_event_cb>, L<new|IO::Async::Notifier/new>, L<notifier_name|IO::Async::Notifier/notifier_name>, L<parent|IO::Async::Notifier/parent>, L<remove_child|IO::Async::Notifier/remove_child>, L<remove_from_parent|IO::Async::Notifier/remove_from_parent>
 
 =back
 

@@ -6,6 +6,8 @@ at lib/Net/Async/AMQP.pm
 If you do edit this file, and don't want your changes to be removed, make
 sure you change the first line.
 
+=encoding utf8
+
 =cut
 
 =head1 NAME
@@ -14,13 +16,14 @@ Net::Async::AMQP - provides client interface to AMQP using L<IO::Async>
 
 =head1 VERSION
 
-version 0.003
+Version 0.004
 
 =head1 SYNOPSIS
 
  use IO::Async::Loop;
  use Net::Async::AMQP;
- my $amqp = Net::Async::AMQP->new(loop => my $loop = IO::Async::Loop->new);
+ my $loop = IO::Async::Loop->new;
+ $loop->add(my $amqp = Net::Async::AMQP->new);
  $amqp->connect(
    host => 'localhost',
    user => 'guest',
@@ -51,6 +54,11 @@ Length of header used in payload messages. Defined by the AMQP standard.
 Largest amount of data we'll attempt to send in a single frame. Actual
 frame limit will be negotiated with the remote server.
 
+=head2 MAX_CHANNELS
+
+Maximum number of channels to request. Defaults to the AMQP limit (65535).
+Attempting to set this any higher will not end well.
+
 =head2 DEBUG
 
 Debugging flag - set C<PERL_AMQP_DEBUG> to 1 in the environment to enable
@@ -60,7 +68,7 @@ informational messages to STDERR.
 
 Interval in seconds between heartbeat frames, zero to disable. Can be
 overridden by C<PERL_AMQP_HEARTBEAT_INTERVAL> in the environment, default
-is 60s.
+is 0 (disabled).
 
 =head1 PACKAGE VARIABLES
 
@@ -74,22 +82,31 @@ Defaults to an extended version of the 0.9.1 protocol as used by RabbitMQ,
 this is found in the C<amqp0-9-1.extended.xml> distribution sharedir (see
 L<File::ShareDir>).
 
+=head1 %CONNECTION_DEFAULTS
+
+The default parameters to use for L</connect>. Changing these values is permitted,
+but do not attempt to delete or add any entries from the hash.
+
+Passing parameters directly to L</connect> is much safer, please do that instead.
+
 =head1 METHODS
 
-=head2 new
+=head2 configure
 
-Constructor. Takes the following parameters:
+Set up variables. Takes the following optional named parameters:
 
 =over 4
-
-=item * loop - the L<IO::Async::Loop> which we should add ourselves to
 
 =item * heartbeat_interval - (optional) interval between heartbeat messages,
 default is set by the L</HEARTBEAT_INTERVAL> constant
 
 =back
 
-Returns $self.
+Returns the new instance.
+
+=head2 bus
+
+Event bus. Used for sharing global events.
 
 =head2 connect
 
@@ -191,13 +208,29 @@ Returns $self.
 
 =head1 METHODS - Accessors
 
-=head2 loop
+=head2 host
 
-L<IO::Async::Loop> container.
+The current host.
+
+=head2 vhost
+
+Virtual host.
+
+=head2 port
+
+Port number. Usually 5672.
+
+=head2 user
+
+MQ user.
 
 =head2 frame_max
 
 Maximum number of bytes allowed in any given frame.
+
+=head2 channel_max
+
+Maximum number of channels.
 
 =head2 last_frame_time
 
@@ -309,12 +342,18 @@ Resets our side of the heartbeat timer.
 This is used to ensure we send data at least once every L</heartbeat_interval>
 seconds.
 
+=head1 future
+
+Returns a new L<IO::Async::Future> instance.
+
+Supports optional named parameters for setting label etc.
+
 =head1 EVENTS
 
 The following events may be raised by this class - use
 L<Mixin::Event::Dispatch/subscribe_to_event> to watch for them:
 
- $mq->subscribe_to_event(
+ $mq->bus->subscribe_to_event(
    heartbeat_failure => sub {
      my ($ev, $last) = @_;
 	 print "Heartbeat failure detected\n";
@@ -337,7 +376,7 @@ Raised if we receive no data from the remote for more than 3 heartbeat intervals
 
 If we receive an unsolicited frame from the server this event will be raised:
 
- $mq->subscribe_to_event(
+ $mq->bus->subscribe_to_event(
   unexpected_frame => sub {
    my ($ev, $type, $frame) = @_;
    warn "Frame type $type received: $frame\n";
@@ -363,9 +402,9 @@ specification into appropriate Perl methods and classes.
 
 =over 4
 
-=item L<Mixin::Event::Dispatch>
+=item L<IO::Async::Notifier>
 
-L<add_handler_for_event|Mixin::Event::Dispatch/add_handler_for_event>, L<clear_event_handlers|Mixin::Event::Dispatch/clear_event_handlers>, L<event_handlers|Mixin::Event::Dispatch/event_handlers>, L<invoke_event|Mixin::Event::Dispatch/invoke_event>, L<subscribe_to_event|Mixin::Event::Dispatch/subscribe_to_event>, L<unsubscribe_from_event|Mixin::Event::Dispatch/unsubscribe_from_event>
+L<add_child|IO::Async::Notifier/add_child>, L<adopt_future|IO::Async::Notifier/adopt_future>, L<can_event|IO::Async::Notifier/can_event>, L<children|IO::Async::Notifier/children>, L<configure_unknown|IO::Async::Notifier/configure_unknown>, L<debug_printf|IO::Async::Notifier/debug_printf>, L<get_loop|IO::Async::Notifier/get_loop>, L<invoke_error|IO::Async::Notifier/invoke_error>, L<invoke_event|IO::Async::Notifier/invoke_event>, L<loop|IO::Async::Notifier/loop>, L<make_event_cb|IO::Async::Notifier/make_event_cb>, L<maybe_invoke_event|IO::Async::Notifier/maybe_invoke_event>, L<maybe_make_event_cb|IO::Async::Notifier/maybe_make_event_cb>, L<new|IO::Async::Notifier/new>, L<notifier_name|IO::Async::Notifier/notifier_name>, L<parent|IO::Async::Notifier/parent>, L<remove_child|IO::Async::Notifier/remove_child>, L<remove_from_parent|IO::Async::Notifier/remove_from_parent>
 
 =back
 

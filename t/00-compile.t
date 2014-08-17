@@ -2,16 +2,22 @@ use 5.006;
 use strict;
 use warnings;
 
-# this test was generated with Dist::Zilla::Plugin::Test::Compile 2.039
+# this test was generated with Dist::Zilla::Plugin::Test::Compile 2.044
 
-use Test::More  tests => 3 + ($ENV{AUTHOR_TESTING} ? 1 : 0);
+use Test::More  tests => 9 + ($ENV{AUTHOR_TESTING} ? 1 : 0);
 
 
 
 my @module_files = (
     'Net/Async/AMQP.pm',
     'Net/Async/AMQP/Channel.pm',
-    'Net/Async/AMQP/Queue.pm'
+    'Net/Async/AMQP/ConnectionManager.pm',
+    'Net/Async/AMQP/ConnectionManager/Channel.pm',
+    'Net/Async/AMQP/ConnectionManager/Connection.pm',
+    'Net/Async/AMQP/Queue.pm',
+    'Net/Async/AMQP/Server.pm',
+    'Net/Async/AMQP/Server/Connection.pm',
+    'Net/Async/AMQP/Server/Protocol.pm'
 );
 
 

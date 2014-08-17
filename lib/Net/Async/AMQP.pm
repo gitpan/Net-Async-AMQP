@@ -2,10 +2,10 @@ package Net::Async::AMQP;
 # ABSTRACT: IO::Async support for the AMQP protocol
 use strict;
 use warnings;
-use parent qw(Mixin::Event::Dispatch);
-use constant EVENT_DISPATCH_ON_FALLBACK => 0;
 
-our $VERSION = '0.003';
+use parent qw(IO::Async::Notifier);
+
+our $VERSION = '0.004';
 
 =head1 NAME
 
@@ -13,13 +13,14 @@ Net::Async::AMQP - provides client interface to AMQP using L<IO::Async>
 
 =head1 VERSION
 
-version 0.003
+Version 0.004
 
 =head1 SYNOPSIS
 
  use IO::Async::Loop;
  use Net::Async::AMQP;
- my $amqp = Net::Async::AMQP->new(loop => my $loop = IO::Async::Loop->new);
+ my $loop = IO::Async::Loop->new;
+ $loop->add(my $amqp = Net::Async::AMQP->new);
  $amqp->connect(
    host => 'localhost',
    user => 'guest',
@@ -38,14 +39,15 @@ something that has been around for longer.
 
 use Net::AMQP;
 use Net::AMQP::Common qw(:all);
+
 use Future;
 use curry::weak;
-use Closure::Explicit qw(callback);
 use Class::ISA ();
 use List::Util qw(min);
 use List::UtilsBy qw(extract_by);
 use File::ShareDir ();
 use Scalar::Util qw(weaken);
+use Mixin::Event::Dispatch::Bus;
 
 =head1 CONSTANTS
 
@@ -75,6 +77,15 @@ frame limit will be negotiated with the remote server.
 
 use constant MAX_FRAME_SIZE        => 262144;
 
+=head2 MAX_CHANNELS
+
+Maximum number of channels to request. Defaults to the AMQP limit (65535).
+Attempting to set this any higher will not end well.
+
+=cut
+
+use constant MAX_CHANNELS          => 65535;
+
 =head2 DEBUG
 
 Debugging flag - set C<PERL_AMQP_DEBUG> to 1 in the environment to enable
@@ -82,17 +93,17 @@ informational messages to STDERR.
 
 =cut
 
-use constant DEBUG => $ENV{PERL_AMQP_DEBUG} // 0;
+use constant DEBUG                 => $ENV{PERL_AMQP_DEBUG} // 0;
 
 =head2 HEARTBEAT_INTERVAL
 
 Interval in seconds between heartbeat frames, zero to disable. Can be
 overridden by C<PERL_AMQP_HEARTBEAT_INTERVAL> in the environment, default
-is 60s.
+is 0 (disabled).
 
 =cut
 
-use constant HEARTBEAT_INTERVAL => $ENV{PERL_AMQP_HEARTBEAT_INTERVAL} // 60;
+use constant HEARTBEAT_INTERVAL    => $ENV{PERL_AMQP_HEARTBEAT_INTERVAL} // 0;
 
 use Net::Async::AMQP::Channel;
 use Net::Async::AMQP::Queue;
@@ -102,7 +113,7 @@ use Net::Async::AMQP::Queue;
 # This is already supported in version 0.06 onwards.
 BEGIN {
 	if(Net::AMQP->VERSION < 0.06) {
-		my $factory = callback {
+		my $factory = sub {
 			my ($class, %args) = @_;
 
 			unless (exists $args{type_id}) { die "Mandatory parameter 'type_id' missing in call to Net::AMQP::Frame::factory"; }
@@ -157,43 +168,61 @@ BEGIN {
 		'amqp0-9-1.extended.xml'
 	);
 
-# Load the appropriate protocol definitions. RabbitMQ uses a
-# modified version of AMQP 0.9.1
+	# Load the appropriate protocol definitions. RabbitMQ uses a
+	# modified version of AMQP 0.9.1
 	Net::AMQP::Protocol->load_xml_spec($XML_SPEC);
 }
+
+=head1 %CONNECTION_DEFAULTS
+
+The default parameters to use for L</connect>. Changing these values is permitted,
+but do not attempt to delete or add any entries from the hash.
+
+Passing parameters directly to L</connect> is much safer, please do that instead.
+
+=cut
+
+our %CONNECTION_DEFAULTS = (
+    port => 5672,
+    host => 'localhost',
+    user => 'guest',
+    pass => 'guest',
+);
 
 =head1 METHODS
 
 =cut
 
-=head2 new
+=head2 configure
 
-Constructor. Takes the following parameters:
+Set up variables. Takes the following optional named parameters:
 
 =over 4
-
-=item * loop - the L<IO::Async::Loop> which we should add ourselves to
 
 =item * heartbeat_interval - (optional) interval between heartbeat messages,
 default is set by the L</HEARTBEAT_INTERVAL> constant
 
 =back
 
-Returns $self.
+Returns the new instance.
 
 =cut
 
-sub new {
-    my $class = shift;
-    my $self = bless {
-		# Apply default heartbeat value, can be overriden
-        heartbeat_interval => HEARTBEAT_INTERVAL,
-        @_
-    }, $class;
-	die "no loop provided" unless $self->{loop};
-	weaken($self->{loop});
-    $self
+sub configure {
+    my ($self, %args) = @_;
+	for (qw(heartbeat_interval)) {
+		$self->{$_} = delete $args{$_} if exists $args{$_}
+	}
+    $self->SUPER::configure(%args)
 }
+
+=head2 bus
+
+Event bus. Used for sharing global events.
+
+=cut
+
+sub bus { $_[0]->{bus} ||= Mixin::Event::Dispatch::Bus->new }
 
 =head2 connect
 
@@ -230,20 +259,32 @@ sub connect {
     my $f = $self->loop->new_future;
 
     # Apply defaults
-    $args{port} ||= 5672;
-    $args{host} //= 'localhost';
-    $args{user} //= 'guest';
-    $args{pass} //= 'guest';
-    $self->{user} = $args{user};
+    $self->{$_} = $args{$_} // $CONNECTION_DEFAULTS{$_} for keys %CONNECTION_DEFAULTS;
+
+	# Remember our event callbacks so we can unsubscribe
+	my $connected;
+	my $close;
+
+	# Clean up once we succeed/fail
+	$f->on_ready(sub {
+		$self->bus->unsubscribe_from_event(close => $close) if $close;
+		$self->bus->unsubscribe_from_event(connected => $connected) if $connected;
+		undef $close;
+		undef $connected;
+		undef $self;
+		undef $f;
+	});
 
     # One-shot event on connection
-    $self->subscribe_to_event(connected => callback {
+    $self->bus->subscribe_to_event(connected => $connected = sub {
         my $ev = shift;
-		unless($f->is_ready) {
-			$f->done($ev->instance);
-		}
-		$ev->unsubscribe;
-    } allowed => [qw($f)]);
+		$f->done($self) unless $f->is_ready;
+    });
+	# Also pick up connection termination
+    $self->bus->subscribe_to_event(close => $close = sub {
+        my $ev = shift;
+		$f->fail('Remote closed connection') unless $f->is_ready;
+    });
 
     $loop->connect(
         host     => $args{host},
@@ -258,20 +299,12 @@ sub connect {
         on_resolve_error => $f->curry::fail('resolve'),
         on_connect_error => $f->curry::fail('connect'),
     );
-	$self->{host} = $args{host};
-	$self->{vhost} = $args{vhost};
-	$self->{port} = $args{port};
     $f;
 }
 
-sub host { shift->{host} }
-sub vhost { shift->{vhost} }
-sub port { shift->{port} }
-sub user { shift->{user} }
-
 sub on_stream {
     my ($self, $args, $stream) = @_;
-    warn "We're in: $stream\n" if DEBUG;
+	$self->debug_printf("Stream received");
     $self->{stream} = $stream;
     $stream->configure(
         on_read => $self->curry::on_read,
@@ -282,9 +315,44 @@ sub on_stream {
     return;
 }
 
+sub dump_frame {
+	my ($self, $pkt) = @_;
+	my ($type) = unpack 'C1', substr $pkt, 0, 1, '';
+	printf "Type: %02x (%s)\n", $type, {
+		1 => 'Method',
+	}->{$type};
+
+	my ($chan) = unpack 'n1', substr $pkt, 0, 2, '';
+	printf "Channel: %d\n", $chan;
+
+	my ($len) = unpack 'N1', substr $pkt, 0, 4, '';
+	printf "Length: %d bytes\n", $len;
+
+	if($type == 1) {
+		my ($class, $method) = unpack 'n1n1', substr $pkt, 0, 4, '';
+		printf "Class: %s\n", $class;
+		printf "Method: %s\n", $method;
+	}
+}
+
 sub on_read {
     my ($self, $stream, $buffref, $eof) = @_;
-    warn "EOF" if DEBUG && $eof;
+	# Frame dumping support - not that useful yet, so it's disabled
+	if(0) {
+		my $mem = $$buffref;
+		$self->dump_frame($mem);
+		my $idx = 0;
+		while(length $mem) {
+			my $hex = join ' ', unpack 'H2'x16, my $bytes = substr $mem, 0, 16, '';
+			substr $hex, 8 * 3, 0, '  ';
+			my $asc = join '', map /([[:print:]])/ ? $1 : '.', split //, $bytes;
+			substr $asc, 8, 0, ' ';
+			printf "%8d:  %-52.52s %s\n", $idx, $hex, $asc;
+			$idx += length($asc);
+		}
+		print "\n";
+		$self->debug_printf("At EOF") if $eof;
+	}
 
 	$self->last_frame_time($self->loop->time);
 
@@ -297,12 +365,12 @@ sub on_read {
 sub on_closed {
 	my $self = shift;
 	my $reason = shift // 'unknown';
-    warn "Connection closed (reason: $reason)" if DEBUG;
+	$self->debug_printf("Connection closed [%s]", $reason);
 	$self->stream->close if $self->stream;
-	$self->invoke_event(close => $reason)
+	$self->bus->invoke_event(close => $reason)
 }
 
-sub heartbeat_interval { shift->{heartbeat_interval} }
+sub heartbeat_interval { shift->{heartbeat_interval} //= HEARTBEAT_INTERVAL }
 
 sub apply_heartbeat_timer {
     my $self = shift;
@@ -332,9 +400,9 @@ This will invoke the L</heartbeat_failure event> then close the connection.
 
 sub handle_heartbeat_failure {
 	my $self = shift;
-    warn "Heartbeat timeout: no data received from server since " . $self->last_frame_time . ", closing connection\n";
+	$self->debug_printf("Heartbeat timeout: no data received from server since %s, closing connection", $self->last_frame_time);
 	$self->heartbeat_timer->stop if $self->heartbeat_timer;
-	$self->invoke_event(heartbeat_failure => $self->last_frame_time);
+	$self->bus->invoke_event(heartbeat_failure => $self->last_frame_time);
 	$self->close;
 }
 
@@ -376,7 +444,7 @@ sub post_connect {
     );
 
     $self->push_pending(
-        'Connection::Start' => callback {
+        'Connection::Start' => sub {
             my ($self, $frame) = @_;
             my $method_frame = $frame->method_frame;
             my @mech = split ' ', $method_frame->mechanisms;
@@ -395,11 +463,16 @@ sub post_connect {
             );
             $self->setup_tuning(%args);
             $self->send_frame($output);
-        } allowed => [qw(%args %client_prop)]
+        }
     );
 
-    # Send the initial header bytes
-    $self->write(Net::AMQP::Protocol->header);
+    # Send the initial header bytes. It'd be nice
+	# if we could use L<Net::AMQP::Protocol/header>
+	# for this, but it seems to be sending 1 for
+	# the protocol ID, and the revision number is
+	# before the major/minor version.
+    # $self->write(Net::AMQP::Protocol->header);
+    $self->write($self->header_bytes);
     $self
 }
 
@@ -415,20 +488,23 @@ sub setup_tuning {
     my $self = shift;
     my %args = @_;
     $self->push_pending(
-        'Connection::Tune' => callback {
+        'Connection::Tune' => sub {
             my ($self, $frame) = @_;
             my $method_frame = $frame->method_frame;
             # Lowest value for frame max wins - our predef constant, or whatever the server suggests
             $self->frame_max(my $frame_max = min $method_frame->frame_max, MAX_FRAME_SIZE);
+			$self->channel_max(my $channel_max = $method_frame->channel_max || $self->channel_max || MAX_CHANNELS);
+			$self->debug_printf("Remote says %d channels, will use %d", $method_frame->channel_max, $channel_max);
+			$self->{channel} = 0;
             $self->send_frame(
                 Net::AMQP::Protocol::Connection::TuneOk->new(
-                    channel_max => 0,
+                    channel_max => $channel_max,
                     frame_max   => $frame_max,
                     heartbeat   => $self->heartbeat_interval,
                 )
             );
             $self->open_connection(%args);
-        } allowed => [qw(%args)]
+        }
     );
 }
 
@@ -470,11 +546,11 @@ sub setup_connection {
     my $self = shift;
     my %args = @_;
     $self->push_pending(
-        'Connection::OpenOk' => callback {
+        'Connection::OpenOk' => sub {
             my ($self, $frame) = @_;
             my $method_frame = $frame->method_frame;
-            warn "we are open for business" if DEBUG;
-            $self->invoke_event(connected =>);
+			$self->debug_printf("OpenOk received");
+            $self->bus->invoke_event(connected =>);
         }
     );
     $self
@@ -490,6 +566,7 @@ manually specified a channel anywhere, so don't do that.
 
 sub next_channel {
     my $self = shift;
+	return undef if $self->{channel} >= $self->channel_max;
     ++$self->{channel}
 }
 
@@ -505,20 +582,23 @@ sub open_channel {
     my $self = shift;
     my %args = @_;
     my $f = $self->loop->new_future;
+    my $channel = $args{channel} // $self->next_channel;
+	die "This channel exists already" if exists $self->{channel_map}{$channel};
+	$self->{channel_map}{$channel} = $f;
+
     my $frame = Net::AMQP::Frame::Method->new(
         method_frame => Net::AMQP::Protocol::Channel::Open->new,
     );
-    my $channel = $args{channel} // $self->next_channel;
     $frame->channel($channel);
-    my $c = Net::Async::AMQP::Channel->new(
-        amqp => $self,
+    $self->add_child(my $c = Net::Async::AMQP::Channel->new(
+        amqp   => $self,
         future => $f,
-        id => $channel,
-    );
+        id     => $channel,
+    ));
     $self->{channel_by_id}{$channel} = $c;
-    warn "Record channel $channel as $c\n" if DEBUG;
+	$self->debug_printf("Record channel %d as %s", $channel, $c);
     $self->push_pending(
-        'Channel::OpenOk' => callback {
+        'Channel::OpenOk' => sub {
             my ($self, $frame) = @_;
             {
                 my $method_frame = $frame->method_frame;
@@ -526,7 +606,7 @@ sub open_channel {
                 $f->done($c) unless $f->is_ready;
             }
             weaken $f;
-        } allowed => [qw($f $c)]
+        }
     );
     $self->send_frame($frame);
     return $f;
@@ -551,14 +631,14 @@ sub close {
 		),
     );
     $self->push_pending(
-        'Connection::CloseOk' => callback {
+        'Connection::CloseOk' => sub {
             my ($self, $frame) = @_;
             {
                 my $method_frame = $frame->method_frame;
                 $f->done($self);
             }
             weaken $f;
-        } allowed => [qw($f)]
+        }
     );
     $self->send_frame($frame);
     return $f;
@@ -599,7 +679,12 @@ sub next_pending {
     if(my $next = shift @{$self->{pending}{$type} || []}) {
 		# We have a registered handler for this frame type. This usually
 		# means that we've sent a message and are awaiting a response.
-		$next->($self, $frame, @_);
+		if(ref($next) eq 'ARRAY') {
+			my ($f, @args) = @$next;
+			$f->done(@args) unless $f->is_ready;
+		} else {
+			$next->($self, $frame, @_);
+		}
 	} else {
 		# It's quite possible we'll see unsolicited frames back from
 		# the server: these will typically be errors, connection close,
@@ -607,7 +692,7 @@ sub next_pending {
 		# option is set (RabbitMQ). We don't expect many so report
 		# them when in debug mode.
 		warn "We had no pending handlers for $type, raising as event" if DEBUG;
-		$self->invoke_event(
+		$self->bus->invoke_event(
 			unexpected_frame => $type, $frame
 		);
 	}
@@ -616,13 +701,37 @@ sub next_pending {
 
 =head1 METHODS - Accessors
 
-=head2 loop
+=head2 host
 
-L<IO::Async::Loop> container.
+The current host.
 
 =cut
 
-sub loop { shift->{loop} }
+sub host { shift->{host} }
+
+=head2 vhost
+
+Virtual host.
+
+=cut
+
+sub vhost { shift->{vhost} }
+
+=head2 port
+
+Port number. Usually 5672.
+
+=cut
+
+sub port { shift->{port} }
+
+=head2 user
+
+MQ user.
+
+=cut
+
+sub user { shift->{user} }
 
 =head2 frame_max
 
@@ -635,6 +744,20 @@ sub frame_max {
     return $self->{frame_max} unless @_;
 
     $self->{frame_max} = shift;
+    $self
+}
+
+=head2 channel_max
+
+Maximum number of channels.
+
+=cut
+
+sub channel_max {
+    my $self = shift;
+    return $self->{channel_max} unless @_;
+
+    $self->{channel_max} = shift;
     $self
 }
 
@@ -804,7 +927,7 @@ sub process_frame {
         }
         unless($frame->body_size) {
             $self->{incoming_message}{$frame->channel}{payload} = '';
-            $self->{channel_map}{$frame->channel}->invoke_event(
+            $self->{channel_map}{$frame->channel}->bus->invoke_event(
                 message => @{$self->{incoming_message}{$frame->channel}}{qw(type payload ctag dtag rkey)},
             );
             delete $self->{incoming_message}{$frame->channel};
@@ -816,7 +939,7 @@ sub process_frame {
     # TODO should handle multiple chunks?
     if($frame->isa('Net::AMQP::Frame::Body')) {
         $self->{incoming_message}{$frame->channel}{payload} = $frame->payload;
-        $self->{channel_map}{$frame->channel}->invoke_event(
+        $self->{channel_map}{$frame->channel}->bus->invoke_event(
             message => @{$self->{incoming_message}{$frame->channel}}{qw(type payload ctag dtag rkey)},
         );
         delete $self->{incoming_message}{$frame->channel};
@@ -932,7 +1055,6 @@ sub send_frame {
     my $self = shift;
     my $frame = shift;
     my %args = @_;
-    my $stream = $self->stream;
 
     # Apply defaults and wrap as required
     $frame = $frame->frame_wrap if $frame->isa("Net::AMQP::Protocol::Base");
@@ -943,10 +1065,12 @@ sub send_frame {
     my $data = $frame->to_raw_frame;
 
 #    warn "Sending data: " . Dumper($frame) . "\n";
-    $stream->write($data);
+    $self->write($data);
 	$self->reset_heartbeat if $self->heartbeat_timer;
     $self;
 }
+
+sub header_bytes { "AMQP\x00\x00\x09\x01" }
 
 =head2 reset_heartbeat
 
@@ -968,6 +1092,28 @@ sub reset_heartbeat {
     $timer->reset;
 }
 
+sub _add_to_loop {
+	my ($self, $loop) = @_;
+	$self->debug_printf("Added %s to loop", $self);
+}
+
+=head1 future
+
+Returns a new L<IO::Async::Future> instance.
+
+Supports optional named parameters for setting label etc.
+
+=cut
+
+sub future {
+	my $self = shift;
+	my $f = $self->loop->new_future;
+	while(my ($k, $v) = splice @_, 0, 2) {
+		$f->can($k) ? $f->$k($v) : $self->debug_printf("Unable to call method $k on $f");
+	}
+	$f
+}
+
 1;
 
 __END__
@@ -977,7 +1123,7 @@ __END__
 The following events may be raised by this class - use
 L<Mixin::Event::Dispatch/subscribe_to_event> to watch for them:
 
- $mq->subscribe_to_event(
+ $mq->bus->subscribe_to_event(
    heartbeat_failure => sub {
      my ($ev, $last) = @_;
 	 print "Heartbeat failure detected\n";
@@ -1000,7 +1146,7 @@ Raised if we receive no data from the remote for more than 3 heartbeat intervals
 
 If we receive an unsolicited frame from the server this event will be raised:
 
- $mq->subscribe_to_event(
+ $mq->bus->subscribe_to_event(
   unexpected_frame => sub {
    my ($ev, $type, $frame) = @_;
    warn "Frame type $type received: $frame\n";

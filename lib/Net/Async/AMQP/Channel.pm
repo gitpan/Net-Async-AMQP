@@ -1,8 +1,9 @@
 package Net::Async::AMQP::Channel;
-$Net::Async::AMQP::Channel::VERSION = '0.003';
+$Net::Async::AMQP::Channel::VERSION = '0.004';
 use strict;
 use warnings;
-use parent qw(Mixin::Event::Dispatch);
+
+use parent qw(IO::Async::Notifier);
 
 =head1 NAME
 
@@ -10,7 +11,7 @@ Net::Async::AMQP::Channel - represents a single channel in an MQ connection
 
 =head1 VERSION
 
-version 0.003
+Version 0.004
 
 =head1 SYNOPSIS
 
@@ -31,7 +32,6 @@ version 0.003
 
 use Future;
 use curry::weak;
-use Closure::Explicit qw(callback);
 use Class::ISA ();
 use Data::Dumper;
 use Scalar::Util qw(weaken);
@@ -39,15 +39,25 @@ use Scalar::Util qw(weaken);
 use Net::Async::AMQP;
 use constant DEBUG => Net::Async::AMQP->DEBUG;
 
+use overload
+    '""' => sub { shift->as_string },
+    '0+' => sub { 0 + shift->id },
+    bool => sub { 1 },
+    fallback => 1;
+
 =head1 METHODS
 
 =cut
 
-sub new {
-    my $class = shift;
-    my $self = bless { @_ }, $class;
-    Scalar::Util::weaken($_) for @{$self}{qw/amqp/};
-    $self
+sub configure {
+	my ($self, %args) = @_;
+	for(grep exists $args{$_}, qw(amqp)) {
+		Scalar::Util::weaken($self->{$_} = delete $args{$_})
+	}
+	for(grep exists $args{$_}, qw(future id)) {
+		$self->{$_} = delete $args{$_};
+	}
+    $self->SUPER::configure(%args);
 }
 
 =head2 confirm_mode
@@ -76,12 +86,7 @@ sub confirm_mode {
         )
     );
     $self->amqp->push_pending(
-        'Confirm::SelectOk' => callback {
-            my $self = shift;
-            $f->done($self) unless $f->is_ready;
-            undef $f;
-        } weaken => [qw($self)],
-          allowed => [qw($f)]
+        'Confirm::SelectOk' => [ $f, $self ]
     );
     $self->amqp->send_frame($frame);
     return $f;
@@ -125,12 +130,7 @@ sub exchange_declare {
         )
     );
     $self->amqp->push_pending(
-        'Exchange::DeclareOk' => callback {
-            my ($amqp, $frame) = @_;
-            my $method_frame = $frame->method_frame;
-            $f->done($self) unless $f->is_ready;
-            undef $f;
-        } allowed => [qw($f $self)]
+        'Exchange::DeclareOk' => [ $f, $self ]
     );
     $self->amqp->send_frame($frame);
     return $f;
@@ -153,16 +153,15 @@ sub queue_declare {
     die "No queue specified" unless defined $args{queue};
 
     warn "queue dec start\n" if DEBUG;
-    $self->future->then(callback {
-        my $self = shift;
+    $self->future->then(sub {
         warn "queue decl\n" if DEBUG;
         my $f = $self->loop->new_future;
-        my $q = Net::Async::AMQP::Queue->new(
-            amqp => $self->amqp,
+        $self->add_child(my $q = Net::Async::AMQP::Queue->new(
+            amqp   => $self->amqp,
             future => $f,
-        );
+        ));
         warn "Attempting to declare our queue" if DEBUG;
-        $q->channel($self);
+        $q->configure(channel => $self);
         my $frame = Net::AMQP::Frame::Method->new(
             channel => $self->id,
             method_frame => Net::AMQP::Protocol::Queue::Declare->new(
@@ -181,19 +180,16 @@ sub queue_declare {
             )
         );
         $self->amqp->push_pending(
-            'Queue::DeclareOk' => callback {
-                my ($self, $frame) = @_;
+            'Queue::DeclareOk' => sub {
+                my ($amqp, $frame) = @_;
                 my $method_frame = $frame->method_frame;
                 $q->queue_name($method_frame->queue);
                 $f->done($q) unless $f->is_ready;
-				undef $q;
-				undef $f;
-            } allowed => [qw($f $q)]
+            }
         );
         $self->send_frame($frame);
         $f;
-    } weaken => [qw($self)],
-      allowed => [qw(%args)]);
+    })
 }
 
 =head2 publish
@@ -216,8 +212,7 @@ sub publish {
     my %args = @_;
     die "no exchange" unless exists $args{exchange};
 
-    $self->future->then(callback {
-        my $self = shift;
+    $self->future->then(sub {
         my $f = $self->loop->new_future;
         my $channel = $self->id;
 		{ # When publishing a message, we should expect either an ACK, or a return.
@@ -226,15 +221,15 @@ sub publish {
 		  # that this crosslinking gives us an unfortunate cycle which we resolve
 		  # by weakening the opposite handler once we've removed it.
 			my $return;
-			my $ack = callback {
+			my $ack = sub {
 				my ($amqp, $frame) = @_;
 				my $method_frame = $frame->method_frame;
 				$amqp->remove_pending('Basic::Return' => $return);
 				$f->done unless $f->is_ready;
 				weaken $f;
 				weaken $return;
-			} allowed => [qw($f $return)];
-			$return = callback {
+			};
+			$return = sub {
 				my ($amqp, $frame) = @_;
 				my $method_frame = $frame->method_frame;
 				$amqp->remove_pending('Basic::Ack' => $ack);
@@ -246,7 +241,7 @@ sub publish {
                 ) unless $f->is_cancelled;
 				weaken $f;
 				weaken $ack;
-			} allowed => [qw($f $ack)];
+			};
 			$self->amqp->push_pending(
 				'Basic::Return' => $return,
 			);
@@ -285,8 +280,7 @@ sub publish {
             channel => $channel,
         ) for @frames;
         $f
-    } weaken => [qw($self)],
-      allowed => [qw(%args)]);
+    })
 }
 
 =head2 qos
@@ -310,18 +304,11 @@ sub qos {
     my $self = shift;
     my %args = @_;
 
-    $self->future->then(callback {
-        my $self = shift;
+    $self->future->then(sub {
         my $f = $self->loop->new_future;
         my $channel = $self->id;
         $self->amqp->push_pending(
-            'Basic::QosOk' => callback {
-                my ($self, $frame) = @_;
-                my $method_frame = $frame->method_frame;
-				warn "QOS Ack" if DEBUG;
-                $f->done unless $f->is_ready;
-                undef $f;
-            } allowed => [qw($f)]
+            'Basic::QosOk' => [ $f, $self ],
         );
 
         my $frame = Net::AMQP::Frame::Method->new(
@@ -334,8 +321,7 @@ sub qos {
         );
         $self->send_frame($frame);
         $f
-    } weaken => [qw($self)],
-      allowed => [qw(%args)]);
+    });
 }
 
 =head2 ack
@@ -356,8 +342,7 @@ sub ack {
     my %args = @_;
 
     my $id = $self->id;
-    $self->future->on_done(callback {
-        my $self = shift;
+    $self->future->on_done(sub {
         my $channel = $id;
         my $frame = Net::AMQP::Frame::Method->new(
             channel => $id,
@@ -368,8 +353,7 @@ sub ack {
             )
         );
         $self->send_frame($frame);
-    } weaken => [qw($self)],
-      allowed => [qw(%args $id)]);
+    });
 }
 
 =pod
@@ -392,7 +376,7 @@ Called when the channel has been closed.
 sub on_close {
     my $self = shift;
     my $frame = shift;
-    $self->invoke_event(
+    $self->bus->invoke_event(
         'close',
         code => $frame->reply_code,
         message => $frame->reply_text,
@@ -437,12 +421,7 @@ sub close {
         )
     );
     $self->amqp->push_pending(
-        'Channel::CloseOk' => callback {
-            my $self = shift;
-            $f->done($self) unless $f->is_ready;
-            undef $f;
-        } weaken => [qw($self)],
-          allowed => [qw($f)]
+        'Channel::CloseOk' => [ $f, $self ],
     );
     $self->amqp->send_frame($frame);
     return $f;
@@ -460,13 +439,13 @@ The parent L<Net::Async::AMQP> instance.
 
 sub amqp { shift->{amqp} }
 
-=head2 loop
+=head2 bus
 
-Our containing L<IO::Async::Loop> instance.
+Event bus. Used for sharing channel-specific events.
 
 =cut
 
-sub loop { shift->amqp->loop }
+sub bus { $_[0]->{bus} ||= Mixin::Event::Dispatch::Bus->new }
 
 =head2 write
 
@@ -499,6 +478,35 @@ sub id {
     $self
 }
 
+sub as_string {
+	my $self = shift;
+	sprintf "Channel[%d]", $self->id;
+}
+
+{
+package Net::Async::AMQP::Channel::Helper;
+$Net::Async::AMQP::Channel::Helper::VERSION = '0.004';
+sub new { bless { channel => $_[1] }, $_[0] }
+sub channel { shift->{channel} }
+sub DESTROY {
+	my $self = shift;
+	$self->channel->release if $self->channel;
+}
+
+our $AUTOLOAD;
+sub AUTOLOAD {
+	my $self = shift;
+	(my $method = $AUTOLOAD) =~ s/^.*:://;
+	warn "Adding new autoload method $method\n";
+	my $code = $self->channel->${\"curry::weak::$method"}->();
+	*{"__PACKAGE__::$method"} = $code;
+	$code->(@_);
+}
+
+sub diagnostics {
+	my ($d, $level) = @_;
+}
+}
 1;
 
 __END__

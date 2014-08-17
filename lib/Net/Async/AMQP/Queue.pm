@@ -1,8 +1,9 @@
 package Net::Async::AMQP::Queue;
-$Net::Async::AMQP::Queue::VERSION = '0.003';
+$Net::Async::AMQP::Queue::VERSION = '0.004';
 use strict;
 use warnings;
-use parent qw(Mixin::Event::Dispatch);
+
+use parent qw(IO::Async::Notifier);
 
 =head1 NAME
 
@@ -10,13 +11,14 @@ Net::Async::AMQP - provides client interface to AMQP using L<IO::Async>
 
 =head1 VERSION
 
-version 0.003
+Version 0.004
 
 =head1 SYNOPSIS
 
  use IO::Async::Loop;
  use Net::Async::AMQP;
- my $amqp = Net::Async::AMQP->new(loop => my $loop = IO::Async::Loop->new);
+ my $loop = IO::Async::Loop->new;
+ $loop->add(my $amqp = Net::Async::AMQP->new);
  $amqp->connect(
    host => 'localhost',
    username => 'guest',
@@ -31,7 +33,6 @@ version 0.003
 
 use Future;
 use curry::weak;
-use Closure::Explicit qw(callback);
 use Class::ISA ();
 use Data::Dumper;
 use Scalar::Util qw(weaken);
@@ -44,7 +45,16 @@ use constant DEBUG => Net::Async::AMQP->DEBUG;
 
 =cut
 
-sub loop { shift->amqp->loop }
+sub configure {
+	my ($self, %args) = @_;
+	for(grep exists $args{$_}, qw(amqp channel)) {
+		Scalar::Util::weaken($self->{$_} = delete $args{$_})
+	}
+	for(grep exists $args{$_}, qw(future)) {
+		$self->{$_} = delete $args{$_};
+	}
+    $self->SUPER::configure(%args);
+}
 
 sub amqp { shift->{amqp} }
 
@@ -57,12 +67,7 @@ sub queue_name {
     $self
 }
 
-sub channel {
-    my $self = shift;
-    return $self->{channel} unless @_;
-    Scalar::Util::weaken($self->{channel} = shift);
-    $self
-}
+sub channel { shift->{channel} }
 
 =head1 METHODS
 
@@ -90,8 +95,7 @@ sub listen {
     my %args = @_;
 
     # Attempt to bind after we've successfully declared the exchange.
-    $self->future->then(callback {
-        my $self = shift;
+    $self->future->then(sub {
         my $f = $self->loop->new_future;
         warn "Attempting to listen for events on queue [" . $self->queue_name . "]\n" if DEBUG;
 
@@ -105,17 +109,14 @@ sub listen {
             nowait       => 0,
         );
         $self->push_pending(
-            'Basic::ConsumeOk' => (callback {
-                my ($self, $amqp, $frame) = @_;
-                $f->done($self => $frame->method_frame->consumer_tag) unless $f->is_cancelled;
-				weaken $f;
-            } weaken => [qw($self)],
-              allowed => [qw($f)])
+            'Basic::ConsumeOk' => (sub {
+                my ($amqp, $frame) = @_;
+                $f->done($self => $frame->method_frame->consumer_tag) unless $f->is_ready;
+            })
         );
         $self->send_frame($frame, channel => $self->channel->id);
         $f;
-    } weaken => [qw($self)],
-      allowed => [qw(%args)]);
+    });
 }
 
 =head2 cancel
@@ -129,8 +130,7 @@ sub cancel {
     my %args = @_;
 
     # Attempt to bind after we've successfully declared the exchange.
-    $self->future->then(callback {
-        my $self = shift;
+    $self->future->then(sub {
         my $f = $self->loop->new_future;
         warn "Attempting to cancel consumer [" . $args{consumer_tag} . "]\n" if DEBUG;
 
@@ -139,17 +139,15 @@ sub cancel {
             nowait       => 0,
         );
         $self->push_pending(
-            'Basic::CancelOk' => (callback {
-                my ($self, $amqp, $frame) = @_;
+            'Basic::CancelOk' => (sub {
+                my ($amqp, $frame) = @_;
                 $f->done($self => $frame->method_frame->consumer_tag) unless $f->is_cancelled;
 				weaken $f;
-            } weaken => [qw($self)],
-              allowed => [qw($f)])
+            })
         );
         $self->send_frame($frame, channel => $self->channel->id);
         $f;
-    } weaken => [qw($self)],
-      allowed => [qw(%args)]);
+    });
 }
 
 sub bind_exchange {
@@ -158,8 +156,7 @@ sub bind_exchange {
     die "No exchange specified" unless exists $args{exchange};
 
     # Attempt to bind after we've successfully declared the exchange.
-    $self->future->then(callback {
-        my $self = shift;
+    $self->future->then(sub {
         my $f = $self->loop->new_future;
         warn "Attempting to bind our queue [" . $self->queue_name . "] to exchange [" . $args{exchange} . "]" if DEBUG;
 
@@ -174,17 +171,11 @@ sub bind_exchange {
             )
         );
         $self->push_pending(
-            'Queue::BindOk' => callback {
-                my $self = shift;
-                $f->done($self) unless $f->is_ready;
-				weaken $f;
-            } weaken => [qw($self)],
-			  allowed => [qw($f)]
+            'Queue::BindOk' => [ $f, $self ],
         );
         $self->send_frame($frame);
         $f
-    } weaken => [qw($self)],
-      allowed => [qw(%args)]);
+    });
 }
 
 =head2 delete
@@ -198,8 +189,7 @@ sub delete {
     my %args = @_;
 
     # Attempt to bind after we've successfully declared the exchange.
-    $self->future->then(callback {
-        my $self = shift;
+    $self->future->then(sub {
         my $f = $self->loop->new_future;
         warn "Attempting to delete queue [" . $self->queue_name . "]" if DEBUG;
 
@@ -211,17 +201,11 @@ sub delete {
             )
         );
         $self->push_pending(
-            'Queue::DeleteOk' => callback {
-                my $self = shift;
-                $f->done($self) unless $f->is_ready;
-				weaken $f;
-            } weaken => [qw($self)],
-			  allowed => [qw($f)]
+            'Queue::DeleteOk' => [ $f, $self ],
         );
         $self->send_frame($frame);
         $f
-    } weaken => [qw($self)],
-      allowed => [qw(%args)]);
+    });
 }
 
 1;

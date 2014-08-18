@@ -16,7 +16,7 @@ Net::Async::AMQP - provides client interface to AMQP using L<IO::Async>
 
 =head1 VERSION
 
-Version 0.004
+Version 0.005
 
 =head1 SYNOPSIS
 

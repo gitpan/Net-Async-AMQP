@@ -16,7 +16,7 @@ Net::Async::AMQP::Channel - represents a single channel in an MQ connection
 
 =head1 VERSION
 
-Version 0.004
+Version 0.005
 
 =head1 SYNOPSIS
 

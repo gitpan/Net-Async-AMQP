@@ -1,5 +1,5 @@
 package Net::Async::AMQP::Channel;
-$Net::Async::AMQP::Channel::VERSION = '0.004';
+$Net::Async::AMQP::Channel::VERSION = '0.005';
 use strict;
 use warnings;
 
@@ -11,7 +11,7 @@ Net::Async::AMQP::Channel - represents a single channel in an MQ connection
 
 =head1 VERSION
 
-Version 0.004
+Version 0.005
 
 =head1 SYNOPSIS
 
@@ -485,7 +485,7 @@ sub as_string {
 
 {
 package Net::Async::AMQP::Channel::Helper;
-$Net::Async::AMQP::Channel::Helper::VERSION = '0.004';
+$Net::Async::AMQP::Channel::Helper::VERSION = '0.005';
 sub new { bless { channel => $_[1] }, $_[0] }
 sub channel { shift->{channel} }
 sub DESTROY {

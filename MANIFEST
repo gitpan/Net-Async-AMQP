@@ -14,6 +14,7 @@ examples/cm.pl
 examples/loadtest-simple.pl
 examples/loadtest.pl
 lib/Net/Async/AMQP.pm
+lib/Net/Async/AMQP.pod
 lib/Net/Async/AMQP/Channel.pm
 lib/Net/Async/AMQP/Channel.pod
 lib/Net/Async/AMQP/ConnectionManager.pm

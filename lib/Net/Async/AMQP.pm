@@ -5,7 +5,7 @@ use warnings;
 
 use parent qw(IO::Async::Notifier);
 
-our $VERSION = '0.005';
+our $VERSION = '0.006';
 
 =head1 NAME
 
@@ -13,7 +13,7 @@ Net::Async::AMQP - provides client interface to AMQP using L<IO::Async>
 
 =head1 VERSION
 
-Version 0.005
+Version 0.006
 
 =head1 SYNOPSIS
 
@@ -583,7 +583,7 @@ sub open_channel {
     my %args = @_;
     my $f = $self->loop->new_future;
     my $channel = $args{channel} // $self->next_channel;
-	die "This channel exists already" if exists $self->{channel_map}{$channel};
+	die "Channel " . $channel . " exists already" if exists $self->{channel_map}{$channel};
 	$self->{channel_map}{$channel} = $f;
 
     my $frame = Net::AMQP::Frame::Method->new(
@@ -623,7 +623,31 @@ Returns a L<Future> which will resolve with C<$self> when the connection is clos
 sub close {
     my $self = shift;
     my %args = @_;
+
     my $f = $self->loop->new_future;
+
+	# We might end up with a connection shutdown rather
+	# than a clean Connection::Close response, so
+	# we need to handle both possibilities
+	$self->bus->subscribe_to_event(
+		my @handler = (
+			close => sub {
+				my ($ev, $reason) = @_;
+				$f->done($reason) unless $f->is_ready;
+				$ev->unsubscribe;
+				weaken $f;
+			}
+		)
+	);
+
+	# ... and make sure we clean up after ourselves
+	$f->on_ready(sub {
+		$self->bus->unsubscribe_from_event(
+			@handler
+		);
+		weaken $f;
+	});
+
     my $frame = Net::AMQP::Frame::Method->new(
         method_frame => Net::AMQP::Protocol::Connection::Close->new(
 			reply_code => $args{code} // 320,
@@ -631,22 +655,17 @@ sub close {
 		),
     );
     $self->push_pending(
-        'Connection::CloseOk' => sub {
-            my ($self, $frame) = @_;
-            {
-                my $method_frame = $frame->method_frame;
-                $f->done($self);
-            }
-            weaken $f;
-        }
+        'Connection::CloseOk' => [ $f, $self ],
     );
     $self->send_frame($frame);
     return $f;
 }
 
 sub channel_closed {
-    my $self = shift;
-    delete $self->{channel_by_id}{+shift};
+    my ($self, $id) = @_;
+	my $ch = delete $self->{channel_map}{$id}
+		or die "Had a close indication for channel $id but this channel is unknown";
+    delete $self->{channel_by_id}{$ch};
     $self
 }
 
@@ -919,9 +938,11 @@ sub process_frame {
     # First part of a frame. There's more to come, so stash a new future
     # and return.
     if($frame->isa('Net::AMQP::Frame::Header')) {
+		$self->{incoming_message}{$frame->channel}{type} = $frame->header_frame->type;
         if($frame->header_frame->headers) {
             eval {
-				$self->{incoming_message}{$frame->channel}{type} = $frame->header_frame->headers->{type};
+				$self->{incoming_message}{$frame->channel}{type} = $frame->header_frame->headers->{type}
+					if exists $frame->header_frame->headers->{type};
 				1
 			} or warn $@;
         }

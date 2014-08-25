@@ -14,33 +14,34 @@ not run its Makefile.PL or Build.PL.
 -----BEGIN PGP SIGNED MESSAGE-----
 Hash: SHA1
 
-SHA1 68aa8dd6f4bdb57b662287997aa44bb6aba1c489 Changes
+SHA1 5f720d099a9af8cb2174365a68de085d59646ba3 Changes
 SHA1 a6b2af2a4ceb6b3ada3ff6b40bd910178d03eb3b INSTALL
 SHA1 6b50b30fa6f8d063d96e32c9a81f3f82328925f7 LICENSE
-SHA1 a36ae3d8fd6936d69b70453dd0204b6868af1561 MANIFEST
-SHA1 8a618b5e6eb9dd2456b3ce4d3aaa0246e10340a7 META.json
-SHA1 4b1636fac1c26b75cbb1c4a31f73cedd3c40120d META.yml
-SHA1 2893059b6cbadee1df79bd614c1e60d84883bb10 Makefile.PL
-SHA1 cce0dc753ca8cef016d98cfd4997be710fc45f0e README
+SHA1 063d168698aa048de911176029fdadc4a3c15591 MANIFEST
+SHA1 50fa3e0ea0acb09ede3091ba91c19e81ef009365 META.json
+SHA1 f13707c45cf6a20e556113004a7a6d687912f0c1 META.yml
+SHA1 be708f847a8cf22e54cb0e4d3c8025fccd2cb0af Makefile.PL
+SHA1 4ce027c7ddce866b6beac2e4bb6408bc8647176e README
 SHA1 e9a831364f27b630a52e35809cc60ab3c9547082 cpanfile
 SHA1 9f364d66f796098962354b3bbd839f7c7577eeea dist.ini
 SHA1 da105bd13f2db9025b2b315f2bce0b5e86ef1925 examples/cm.pl
 SHA1 19e3ddc62713566795d3999f1813f0efd95ed330 examples/loadtest-simple.pl
 SHA1 573e4c6862e5058ba8eab78f744b6920fc9a4e57 examples/loadtest.pl
-SHA1 bc076fd78099ef68beedea3f93d9b913db990905 lib/Net/Async/AMQP.pm
-SHA1 8d3f8823413ea7c04b0e3ef28961fef61358e6d2 lib/Net/Async/AMQP/Channel.pm
-SHA1 0b3eea96924f957716623869e286476be55f7845 lib/Net/Async/AMQP/Channel.pod
-SHA1 9d4378c6db76c314b026e23aa9946fd7a21a58bc lib/Net/Async/AMQP/ConnectionManager.pm
-SHA1 35ffa55837bc336dc3b0184b0b84835c51f46f61 lib/Net/Async/AMQP/ConnectionManager.pod
-SHA1 60cddb91c5001aadf76587b0626bbb4b7860b9a5 lib/Net/Async/AMQP/ConnectionManager/Channel.pm
-SHA1 aadd20793e74239789dfaa939887c3f1d7ac0cb2 lib/Net/Async/AMQP/ConnectionManager/Connection.pm
-SHA1 7915c32881efc47566ceb87b9d18b61506261752 lib/Net/Async/AMQP/Queue.pm
-SHA1 7c3b5915a59acda204104ef8309308cb96546d95 lib/Net/Async/AMQP/Queue.pod
-SHA1 b090617bd4e6e4d6671f8324cb6d6898e562f47c lib/Net/Async/AMQP/Server.pm
+SHA1 879f06922b407860decf9d461c74cf4301dc5c9b lib/Net/Async/AMQP.pm
+SHA1 10809f8af2e41602872e43845cbba1b1d75cd354 lib/Net/Async/AMQP.pod
+SHA1 9944887bd939bd41cb928ebce44dfafaaa389649 lib/Net/Async/AMQP/Channel.pm
+SHA1 fc8ee5404a748eb41e9dc4a48ebcd678706ac79c lib/Net/Async/AMQP/Channel.pod
+SHA1 75a37f5f95e8445e0addd64d23e0d481af4de45e lib/Net/Async/AMQP/ConnectionManager.pm
+SHA1 43fa988d2f422dd04aa5b839d42d5fe4166adc8f lib/Net/Async/AMQP/ConnectionManager.pod
+SHA1 dd1dfe3b8b3898e347a05af3d28811e690d55966 lib/Net/Async/AMQP/ConnectionManager/Channel.pm
+SHA1 04d3b0123ec8be5b6fc05ab3399dade747903099 lib/Net/Async/AMQP/ConnectionManager/Connection.pm
+SHA1 f2920ede0c3b8fec6e030d4cd69cf8425d32a6aa lib/Net/Async/AMQP/Queue.pm
+SHA1 fc7e3e4071c4010246a540abea63536eaa74cd7c lib/Net/Async/AMQP/Queue.pod
+SHA1 7d8a30c9827aacc751a95d1afefeb359a6165fb8 lib/Net/Async/AMQP/Server.pm
 SHA1 7b0595fed6cbd522b62fefe1f95a62f99a0c556d lib/Net/Async/AMQP/Server.pod
-SHA1 a2f6620c3a88e5670e4013f5a7017aead32f0a79 lib/Net/Async/AMQP/Server/Connection.pm
+SHA1 933fe8e54fd58f49cae82f7f27a2fae6ea52109e lib/Net/Async/AMQP/Server/Connection.pm
 SHA1 b4546facdfc0ebfb1f8c2ced366c9214ae31f756 lib/Net/Async/AMQP/Server/Connection.pod
-SHA1 1f3601c8ae5a2b9d20d67dffabec5037420c365f lib/Net/Async/AMQP/Server/Protocol.pm
+SHA1 29cf610a1f47563b858e48b61461b225245b5a75 lib/Net/Async/AMQP/Server/Protocol.pm
 SHA1 49ea1518280a27503e30486509aefe9a6424daee share/amqp0-9-1.extended.xml
 SHA1 985d9ded8d8ed7e344a09e52b1402e878e91da28 t/00-check-deps.t
 SHA1 673bba486be9ccbbfba8a29747e5d719aaec862f t/00-compile.t
@@ -55,11 +56,11 @@ SHA1 bbcd59d081d9940af5d43337ae85458075933829 xt/release/test-version.t
 -----BEGIN PGP SIGNATURE-----
 Version: GnuPG v1
 
-iQEcBAEBAgAGBQJT8XzuAAoJEFKElMNpjtyDlEEH/AxYc/cfcEIlkKm7A2NIqadV
-xGIWYCfjWs0b6nZQRNZksZIABPRcdTnUi43IPU1DAkUtohyDVmRjDfG+X+Gep1e2
-2x1Gca2MBDsnZvePV0qAdSshDKymG7nkse1AFZrkWPfWG+/GOJeilC5Sx0CgD1B/
-t3pQO4tDNPcK+TdsNB9UjJok7geXP2OQxjYiX95aI3ApC2pUr0w/hq4isHA1Moqy
-HFZq4Di+MFsV3hiFHUkvAKwC9cs4xWXyeWnwZbK2jMoTegGIJ8kfg10Ie3V5k2Jw
-pZYkW5sZ5Uwmt+b8y4bZWQR30Iz4+VrT9MF3CjEtvFO1JWwbPU++zeHQmbH2HXU=
-=ZO6Y
+iQEcBAEBAgAGBQJT+2vxAAoJEFKElMNpjtyDwSMH/1QFlwN5+mj1xTtbwW6S7cZG
+SYywXfol2R2JBN6/OG6HxPr7c2wFGThLiP4d1kHyise7T4WcN4hDOvnVS7RRh74e
+2dB8LuLF1YA8VQ8qwJnCtI0PfXeXu7UMp9sQT9bIeURYeJnC2bkwjWYPepZjnRdk
+1BIBsxv1jqutJEHr6Xc9P/QPoYcCsrWOsJmMMk63CFU6qwwnZzAjXDDVlvZpink9
+QxAdD+ex/TRpvOhAiRKut12EdEq8ZduVIcX2lE5p1534NxLhjMBICcfKRp1RtfXU
+LuVyEhTh71XgBabJofThAeqZzYzwjo8DFdFcoTQsc0IyMZelmaSVkEypthHy2Rw=
+=rRSM
 -----END PGP SIGNATURE-----

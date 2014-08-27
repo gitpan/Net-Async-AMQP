@@ -10,6 +10,34 @@ sure you change the first line.
 
 =cut
 
+=head2 configure
+
+Set up the instance.
+
+Takes teh following named parameters:
+
+=over 4
+
+=item *
+
+=back
+
+=head2 local_host
+
+Accessor for the current local_host setting.
+
+=head2 port
+
+Accessor for the current port setting
+
+=head2 listening
+
+Resolves with the listener.
+
+=head2 on_listen
+
+Called when we have a listening socket.
+
 =head1 INHERITED METHODS
 
 =over 4

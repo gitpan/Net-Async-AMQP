@@ -1,5 +1,5 @@
 package Net::Async::AMQP::ConnectionManager;
-$Net::Async::AMQP::ConnectionManager::VERSION = '0.006';
+$Net::Async::AMQP::ConnectionManager::VERSION = '0.007';
 use strict;
 use warnings;
 
@@ -11,7 +11,7 @@ Net::Async::AMQP::ConnectionManager - handle MQ connections
 
 =head1 VERSION
 
-Version 0.006
+Version 0.007
 
 =head1 SYNOPSIS
 
@@ -125,6 +125,7 @@ sub request_channel {
 	my $k = $self->key_for_args(\%args);
 	if(exists $self->{channel_by_key}{$k} && @{$self->{channel_by_key}{$k}}) {
 		my $ch = shift @{$self->{channel_by_key}{$k}};
+		$self->debug_printf("Assigning %d from by_key cache", $ch->id);
 		return Future->wrap(
 			Net::Async::AMQP::ConnectionManager::Channel->new(
 				channel => $ch,
@@ -140,6 +141,7 @@ sub request_channel {
 	if(exists $self->{closed_channel} && @{$self->{closed_channel}}) {
 		# If we have an ID for a closed channel then reuse that first.
 		my ($mq, $id) = @{shift @{$self->{closed_channel}}};
+		$self->debug_printf("Reopening closed channel %d", $id);
 		$f = $mq->open_channel(
 			channel => $id
 		);
@@ -185,6 +187,7 @@ sub request_channel {
 		done => sub {
 			my $ch = shift;
 			$self->{channel_args}{$ch->id} = \%args;
+			$self->debug_printf("Assigning newly-created channel %d", $ch->id);
 			Net::Async::AMQP::ConnectionManager::Channel->new(
 				channel => $ch,
 				manager => $self,
@@ -261,6 +264,7 @@ sub request_connection {
 	my ($self) = @_;
 	die "We are shutting down" if $self->{shutdown_future};
 	if(my $conn = $self->{pending_connection}) {
+		$self->debug_printf("Requested connection and we have one pending, returning that");
 		return $conn
 	}
 
@@ -268,13 +272,14 @@ sub request_connection {
 		$self->debug_printf("Assigning existing connection");
 		return Future->wrap(
 			Net::Async::AMQP::ConnectionManager::Connection->new(
-				amqp    => shift @{$self->{available_connections}},
+				amqp    => $self->{available_connections}[0],
 				manager => $self,
 			)
 		)
 	}
 	die "No connection details available" unless $self->{amqp_host};
 
+	$self->debug_printf("New connection is required");
 	$self->{pending_connection} = $self->connect(
 		%{$self->next_host}
 	)->on_ready(sub {
@@ -282,10 +287,12 @@ sub request_connection {
 	})->transform(
 		done => sub {
 			my $mq = shift;
-			Net::Async::AMQP::ConnectionManager::Connection->new(
+			my $conn = Net::Async::AMQP::ConnectionManager::Connection->new(
 				amqp    => $mq,
 				manager => $self,
-			)
+			);
+			push @{$self->{available_connections}}, $conn;
+			$conn
 		}
 	)->set_label(
 		'Connect to MQ server'
@@ -330,7 +337,6 @@ channels.
 
 sub mark_connection_full {
 	my ($self, $mq) = @_;
-
 }
 
 =head2 key_for_args
@@ -365,6 +371,7 @@ Releases the given channel back to our channel pool.
 
 sub release_channel {
 	my ($self, $ch) = @_;
+	$self->debug_printf("Releasing channel %d", $ch->id);
 	my $args = $self->{channel_args}{$ch->id};
 	my $k = $self->key_for_args($args);
 	push @{$self->{channel_by_key}{$k}}, $ch;

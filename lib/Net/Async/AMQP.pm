@@ -5,7 +5,7 @@ use warnings;
 
 use parent qw(IO::Async::Notifier);
 
-our $VERSION = '0.006';
+our $VERSION = '0.007';
 
 =head1 NAME
 
@@ -13,7 +13,7 @@ Net::Async::AMQP - provides client interface to AMQP using L<IO::Async>
 
 =head1 VERSION
 
-Version 0.006
+Version 0.007
 
 =head1 SYNOPSIS
 
@@ -988,6 +988,10 @@ sub process_frame {
         return $self;
     }
 
+	if(my $ch = $self->channel_by_id($frame->channel)) {
+		return $self if $ch->next_pending($frame_type, $frame);
+	}
+
     $self->next_pending($frame_type, $frame);
 
     return $self;
@@ -1080,7 +1084,7 @@ sub send_frame {
     # Apply defaults and wrap as required
     $frame = $frame->frame_wrap if $frame->isa("Net::AMQP::Protocol::Base");
     $frame->channel($args{channel} // 0) unless defined $frame->channel;
-    warn "Sending frame " . Dumper $frame if DEBUG;
+#    warn "Sending frame " . Dumper($frame) if DEBUG;
 
     # Get bytes to send across our transport
     my $data = $frame->to_raw_frame;

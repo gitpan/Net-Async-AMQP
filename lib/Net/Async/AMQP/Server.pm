@@ -1,5 +1,5 @@
 package Net::Async::AMQP::Server;
-$Net::Async::AMQP::Server::VERSION = '0.007';
+$Net::Async::AMQP::Server::VERSION = '0.008';
 use strict;
 use warnings;
 
@@ -86,22 +86,23 @@ sub on_listen {
 sub _add_to_loop {
 	my ($self, $loop) = @_;
 	$self->SUPER::_add_to_loop($loop);
-	$self->listen(
-		addr => {
-			family => 'inet',
-			socktype => 'stream',
-			port => $self->port,
-			ip => ($self->local_host // '0.0.0.0'),
-		},
-		on_listen => $self->curry::weak::on_listen,
-	)->then(sub {
-		$self->on_listen;
-	});
+	$self->adopt_future(
+		$self->listen(
+			addr => {
+				family => 'inet',
+				socktype => 'stream',
+				port => $self->port,
+				ip => ($self->local_host // '0.0.0.0'),
+			},
+		)->then(sub {
+			$self->on_listen;
+		})
+	)
 }
 
 sub on_accept {
 	my ($self, $sock) = @_;
-	warn "Incoming: $sock\n";
+	$self->debug_printf("Incoming: $sock");
 	my $stream = Net::Async::AMQP::Server::Connection->new(
 		handle => $sock,
 	);

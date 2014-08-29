@@ -1,5 +1,5 @@
 package Net::Async::AMQP::ConnectionManager;
-$Net::Async::AMQP::ConnectionManager::VERSION = '0.007';
+$Net::Async::AMQP::ConnectionManager::VERSION = '0.008';
 use strict;
 use warnings;
 
@@ -11,7 +11,7 @@ Net::Async::AMQP::ConnectionManager - handle MQ connections
 
 =head1 VERSION
 
-Version 0.007
+Version 0.008
 
 =head1 SYNOPSIS
 
@@ -371,6 +371,8 @@ Releases the given channel back to our channel pool.
 
 sub release_channel {
 	my ($self, $ch) = @_;
+	return $self unless $ch;
+
 	$self->debug_printf("Releasing channel %d", $ch->id);
 	my $args = $self->{channel_args}{$ch->id};
 	my $k = $self->key_for_args($args);

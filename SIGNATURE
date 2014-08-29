@@ -14,40 +14,41 @@ not run its Makefile.PL or Build.PL.
 -----BEGIN PGP SIGNED MESSAGE-----
 Hash: SHA1
 
-SHA1 f7067c9939289a81f4a2ec63dcebd11c35f084b1 Changes
+SHA1 efb930bce476486c30624aa1c094475218ead1b0 Changes
 SHA1 a6b2af2a4ceb6b3ada3ff6b40bd910178d03eb3b INSTALL
 SHA1 6b50b30fa6f8d063d96e32c9a81f3f82328925f7 LICENSE
-SHA1 063d168698aa048de911176029fdadc4a3c15591 MANIFEST
-SHA1 a624a9804ed4199cab08d65390d2211cb004ffbf META.json
-SHA1 eb750a151507f65646e64b2f40a17eb69c6d4ff3 META.yml
-SHA1 95809e3e77b8ab4b059810b6b898a3f6da822ce0 Makefile.PL
-SHA1 2045dee92c1c0df6a0d9d2da608d4d6c134989ac README
+SHA1 46f7c6b3f5dbbb8cbeb68972963d4a75bcdfc4f0 MANIFEST
+SHA1 d90e9e297ebd918c9d95f7d8b1cc46580cde89b8 META.json
+SHA1 b3b65224412f6e790a02b7f31ffd787fb8a5e229 META.yml
+SHA1 92829b385e02f8568f7befb3442dbb981f2375a3 Makefile.PL
+SHA1 7336fe312b22610ffa8f176b8dbc51b3f87847d0 README
 SHA1 e9a831364f27b630a52e35809cc60ab3c9547082 cpanfile
 SHA1 9f364d66f796098962354b3bbd839f7c7577eeea dist.ini
 SHA1 da105bd13f2db9025b2b315f2bce0b5e86ef1925 examples/cm.pl
 SHA1 19e3ddc62713566795d3999f1813f0efd95ed330 examples/loadtest-simple.pl
 SHA1 573e4c6862e5058ba8eab78f744b6920fc9a4e57 examples/loadtest.pl
-SHA1 6714ff35b27705141d5239c8f9d7a9f8677446fb lib/Net/Async/AMQP.pm
-SHA1 5b349fbc45e920a3acca5aa418fa16a0d354678b lib/Net/Async/AMQP.pod
-SHA1 18120b4910e051ee9c4bdac32bf6d20f0c5eab60 lib/Net/Async/AMQP/Channel.pm
-SHA1 07059f0f65128d5293c5c2750760dcdfb925f7d8 lib/Net/Async/AMQP/Channel.pod
-SHA1 cd2887100cc29de54b5299d4bb03ed86eb2419cd lib/Net/Async/AMQP/ConnectionManager.pm
-SHA1 7d4e265f1526214974e02a6d51578aa0476e0ffc lib/Net/Async/AMQP/ConnectionManager.pod
-SHA1 89004760b7a448f3b143ebb67de8e4c7112f5619 lib/Net/Async/AMQP/ConnectionManager/Channel.pm
-SHA1 c9b584e9f29c45d39d72b20021735d11e786854f lib/Net/Async/AMQP/ConnectionManager/Connection.pm
-SHA1 df1b070d162ac5728a49dfe8ddaf2c58554d5baf lib/Net/Async/AMQP/Queue.pm
-SHA1 1dd60b3c2baa5b4b4af13ff3791f50ffaf182b87 lib/Net/Async/AMQP/Queue.pod
-SHA1 63c0f42db00627f86847ba5f270e94d6ba18688c lib/Net/Async/AMQP/Server.pm
+SHA1 081e072fe23a31c938fc8ad6a7d2ae00aa13d3d3 lib/Net/Async/AMQP.pm
+SHA1 d03fede17a218bea8929710747e6d9218bebb9a3 lib/Net/Async/AMQP.pod
+SHA1 3babb5220e68e7eef0fb7722d907f8f998a28937 lib/Net/Async/AMQP/Channel.pm
+SHA1 3021c960bbedc872e319d2e532d5ee787eefa57f lib/Net/Async/AMQP/Channel.pod
+SHA1 ed2677bc49beb4f44e3593b02c545cd7c5e23725 lib/Net/Async/AMQP/ConnectionManager.pm
+SHA1 b0c3a8c864c1d11225d0ac18f4aeeb0e066c5c61 lib/Net/Async/AMQP/ConnectionManager.pod
+SHA1 b510e7290aadb6aac8112eb1f79e1d810cda4499 lib/Net/Async/AMQP/ConnectionManager/Channel.pm
+SHA1 563ee4f809f097818f5e9604ff6219d3b073daa8 lib/Net/Async/AMQP/ConnectionManager/Connection.pm
+SHA1 b51c0dc01da34f9c75329585e65a7c9f3a64e535 lib/Net/Async/AMQP/Queue.pm
+SHA1 daec159bd50b1200716c4083addfe9e53b6f6f4e lib/Net/Async/AMQP/Queue.pod
+SHA1 a883eaac90c291554fdd8a59c25465f8c76c3852 lib/Net/Async/AMQP/Server.pm
 SHA1 e6842dc70852d5c620d0dfd6c26fc45445bc4c0d lib/Net/Async/AMQP/Server.pod
-SHA1 c5bcafca71e59d408752d46eebdc4acf1584d3f7 lib/Net/Async/AMQP/Server/Connection.pm
+SHA1 dd0fdc6b80f2b21ba6b5bb79a9aa1ce05d20cac0 lib/Net/Async/AMQP/Server/Connection.pm
 SHA1 b4546facdfc0ebfb1f8c2ced366c9214ae31f756 lib/Net/Async/AMQP/Server/Connection.pod
-SHA1 90f71df0c7fa93cfcf4112219e254337a314e970 lib/Net/Async/AMQP/Server/Protocol.pm
+SHA1 dd33d8a932d04b638403506c068427d9cb4e70bb lib/Net/Async/AMQP/Server/Protocol.pm
+SHA1 3fc14e78bcc13de17f3681e234858703e5daf032 lib/Net/Async/AMQP/Server/Protocol.pod
 SHA1 49ea1518280a27503e30486509aefe9a6424daee share/amqp0-9-1.extended.xml
 SHA1 985d9ded8d8ed7e344a09e52b1402e878e91da28 t/00-check-deps.t
 SHA1 673bba486be9ccbbfba8a29747e5d719aaec862f t/00-compile.t
 SHA1 aab58a39fad187c5f374b1a7d3392fa1c198c594 t/000-report-versions-tiny.t
 SHA1 8bc82ed5a4bcad1d52c7ab836e51b6cff950006b t/conman.t
-SHA1 623f71cc112126b4fa1c11eca05ca9eaeb0a8c2c t/server.t
+SHA1 a9d82cc20653d9348949e137d1ef8297084f5ca1 t/server.t
 SHA1 198d1665317c3d91e3bb81f0a3b8dad8d4d66f20 xt/release/common_spelling.t
 SHA1 c6c3c9f7fe12058b4771449dff874b1c450c982c xt/release/mojibake.t
 SHA1 296928dbbcaffd1514ccc9b77a1e6e03cfe9b068 xt/release/pod-syntax.t
@@ -56,11 +57,11 @@ SHA1 bbcd59d081d9940af5d43337ae85458075933829 xt/release/test-version.t
 -----BEGIN PGP SIGNATURE-----
 Version: GnuPG v1
 
-iQEcBAEBAgAGBQJT/UIPAAoJEFKElMNpjtyDhIIIALnxulfnE38WLPvvunG+TJ5T
-cXHcATyTXv/1DiZ5HArBaPO1JYwJ3hYTpt48AQlzRW6XK6Ed/UNpAV+e8Q1kaVnM
-v9dG1stQkPQSVsnBSft7RSnywgUqp51TfRN9dlto/POsXWnOGNeDNc3LbUmNyj32
-YyjB/PLWKDfQ7xD4H16bH1oyyy0wKmFFziEUPTm3+U5ruHIh8v/lBx4TTiy4zXcb
-sOENtPhPLcCe2Wq/mJJw2Ifkxrc7vFmLeg7fm1xR7fw0GmM5YJt9tPE21IlMmVEE
-2y0k7eASspersUQ8GgOHGuNpKV6n2uORCu19imsTMKIWfgzz2OL1vDTgezELKCg=
-=81iB
+iQEcBAEBAgAGBQJUAQ3oAAoJEFKElMNpjtyD4uEIAIcXIFWrx1IFPvDIuFODgRWX
+k60ILXqOU5sG0LjUnedG5CTKoW+dkKHwRgeJBTste//PeraUtltc8ItQKWEJdLP7
+owLiOa2dxY8wiUcshgR63gpyhT8/13diQmfxDRrX0ihTXLVf9pqWB7hPvUGisadr
+ew+XKwrEHfSU/iSek2ZzUsREnNY+tpkumkXQF0AOgzBT4+rBzNiMaHe+FO4PCxMP
+SnaaXRoUPnpO9s9G0uCglZznqPNCC1ePWOaJu6+szqgqVJstyc29NoENwL82Cqv2
+V5W1kWTjYT2kzDSBE9699qpfoZONwhsbHz6ZZQ719JEZlRbK50lMRB6d64c7gGk=
+=SGvL
 -----END PGP SIGNATURE-----

@@ -16,7 +16,7 @@ Net::Async::AMQP - provides client interface to AMQP using L<IO::Async>
 
 =head1 VERSION
 
-Version 0.007
+Version 0.008
 
 =head1 SYNOPSIS
 
@@ -38,6 +38,9 @@ Does AMQP things. Note that the API may change before the stable 1.000
 release - L</SEE ALSO> has some alternative modules if you're looking for
 something that has been around for longer.
 
+If you want a higher-level API which manages channels and connections, try
+L<Net::Async::AMQP::ConnectionManager>.
+
 =head1 CONSTANTS
 
 =head2 AUTH_MECH
@@ -52,12 +55,13 @@ Length of header used in payload messages. Defined by the AMQP standard.
 =head2 MAX_FRAME_SIZE
 
 Largest amount of data we'll attempt to send in a single frame. Actual
-frame limit will be negotiated with the remote server.
+frame limit will be negotiated with the remote server. Defaults to 262144.
 
 =head2 MAX_CHANNELS
 
 Maximum number of channels to request. Defaults to the AMQP limit (65535).
-Attempting to set this any higher will not end well.
+Attempting to set this any higher will not end well, it's an unsigned 16-bit
+value.
 
 =head2 DEBUG
 
@@ -81,6 +85,13 @@ protocol.
 Defaults to an extended version of the 0.9.1 protocol as used by RabbitMQ,
 this is found in the C<amqp0-9-1.extended.xml> distribution sharedir (see
 L<File::ShareDir>).
+
+Normally, you should be able to ignore this. If you want to load an alternative
+spec, note that (a) this is global, rather than per-instance, (b) it needs to
+be set before you C<use> this module.
+
+ BEGIN { $Net::Async::AMQP::XML_SPEC = '/tmp/amqp.xml' }
+ use Net::Async::AMQP;
 
 =head1 %CONNECTION_DEFAULTS
 
@@ -106,7 +117,7 @@ Returns the new instance.
 
 =head2 bus
 
-Event bus. Used for sharing global events.
+Event bus. Used for sharing global events such as connection closure.
 
 =head2 connect
 
@@ -226,16 +237,16 @@ MQ user.
 
 =head2 frame_max
 
-Maximum number of bytes allowed in any given frame.
+Maximum number of bytes allowed in any given frame. This is the
+value negotiated with the remote server.
 
 =head2 channel_max
 
-Maximum number of channels.
+Maximum number of channels. This is whatever we ended up with after initial negotiation.
 
 =head2 last_frame_time
 
-Timestamp of the last frame we received from
-the remote. Used for handling heartbeats.
+Timestamp of the last frame we received from the remote. Used for handling heartbeats.
 
 =head2 stream
 

@@ -28,6 +28,7 @@ lib/Net/Async/AMQP/Server.pod
 lib/Net/Async/AMQP/Server/Connection.pm
 lib/Net/Async/AMQP/Server/Connection.pod
 lib/Net/Async/AMQP/Server/Protocol.pm
+lib/Net/Async/AMQP/Server/Protocol.pod
 share/amqp0-9-1.extended.xml
 t/00-check-deps.t
 t/00-compile.t

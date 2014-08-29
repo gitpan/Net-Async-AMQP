@@ -1,5 +1,5 @@
 package Net::Async::AMQP::ConnectionManager::Connection;
-$Net::Async::AMQP::ConnectionManager::Connection::VERSION = '0.007';
+$Net::Async::AMQP::ConnectionManager::Connection::VERSION = '0.008';
 use strict;
 use warnings;
 
@@ -9,7 +9,7 @@ Net::Async::AMQP::ConnectionManager::Connection - connection proxy object
 
 =head1 VERSION
 
-Version 0.007
+Version 0.008
 
 =head1 METHODS
 
@@ -49,7 +49,9 @@ that we no longer require the data.
 
 sub DESTROY {
 	my $self = shift;
-	(delete $self->{manager})->release_connection(delete $self->{amqp});
+	my $conman = delete $self->{manager};
+	my $amqp = delete $self->{amqp};
+	$conman->release_connection($amqp) if $conman && $amqp;
 }
 
 {

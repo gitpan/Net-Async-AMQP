@@ -5,7 +5,7 @@ use warnings;
 
 use parent qw(IO::Async::Notifier);
 
-our $VERSION = '0.007';
+our $VERSION = '0.008';
 
 =head1 NAME
 
@@ -13,7 +13,7 @@ Net::Async::AMQP - provides client interface to AMQP using L<IO::Async>
 
 =head1 VERSION
 
-Version 0.007
+Version 0.008
 
 =head1 SYNOPSIS
 
@@ -34,6 +34,9 @@ Version 0.007
 Does AMQP things. Note that the API may change before the stable 1.000
 release - L</SEE ALSO> has some alternative modules if you're looking for
 something that has been around for longer.
+
+If you want a higher-level API which manages channels and connections, try
+L<Net::Async::AMQP::ConnectionManager>.
 
 =cut
 
@@ -71,7 +74,7 @@ use constant PAYLOAD_HEADER_LENGTH => 8;
 =head2 MAX_FRAME_SIZE
 
 Largest amount of data we'll attempt to send in a single frame. Actual
-frame limit will be negotiated with the remote server.
+frame limit will be negotiated with the remote server. Defaults to 262144.
 
 =cut
 
@@ -80,7 +83,8 @@ use constant MAX_FRAME_SIZE        => 262144;
 =head2 MAX_CHANNELS
 
 Maximum number of channels to request. Defaults to the AMQP limit (65535).
-Attempting to set this any higher will not end well.
+Attempting to set this any higher will not end well, it's an unsigned 16-bit
+value.
 
 =cut
 
@@ -108,45 +112,6 @@ use constant HEARTBEAT_INTERVAL    => $ENV{PERL_AMQP_HEARTBEAT_INTERVAL} // 0;
 use Net::Async::AMQP::Channel;
 use Net::Async::AMQP::Queue;
 
-# Heartbeat support - the frame type isn't handled by the factory, but
-# there's a basic subclass in place so we just need to map the type_id here.
-# This is already supported in version 0.06 onwards.
-BEGIN {
-	if(Net::AMQP->VERSION < 0.06) {
-		my $factory = sub {
-			my ($class, %args) = @_;
-
-			unless (exists $args{type_id}) { die "Mandatory parameter 'type_id' missing in call to Net::AMQP::Frame::factory"; }
-			unless (exists $args{channel}) { die "Mandatory parameter 'channel' missing in call to Net::AMQP::Frame::factory"; }
-			unless (exists $args{payload}) { die "Mandatory parameter 'payload' missing in call to Net::AMQP::Frame::factory"; }
-			unless (keys %args == 3)       { die "Invalid parameter passed in call to Net::AMQP::Frame::factory"; }
-
-			my $subclass;
-			if ($args{type_id} == 1) {
-				$subclass = 'Method';
-			}
-			elsif ($args{type_id} == 2) {
-				$subclass = 'Header';
-			}
-			elsif ($args{type_id} == 3) {
-				$subclass = 'Body';
-			} elsif ($args{type_id} == 8) {
-				$subclass = 'Heartbeat';
-			}
-			else {
-				die "Unknown type_id $args{type_id}";
-			}
-
-			$subclass = 'Net::AMQP::Frame::' . $subclass;
-			my $object = bless \%args, $subclass;
-			$object->parse_payload();
-			return $object;
-		};
-		{ no strict 'refs'; no warnings 'redefine'; *{'Net::AMQP::Frame::factory'} = $factory; }
-	}
-
-}
-
 =head1 PACKAGE VARIABLES
 
 =head2 $XML_SPEC
@@ -158,6 +123,13 @@ protocol.
 Defaults to an extended version of the 0.9.1 protocol as used by RabbitMQ,
 this is found in the C<amqp0-9-1.extended.xml> distribution sharedir (see
 L<File::ShareDir>).
+
+Normally, you should be able to ignore this. If you want to load an alternative
+spec, note that (a) this is global, rather than per-instance, (b) it needs to
+be set before you C<use> this module.
+
+ BEGIN { $Net::Async::AMQP::XML_SPEC = '/tmp/amqp.xml' }
+ use Net::Async::AMQP;
 
 =cut
 
@@ -218,7 +190,7 @@ sub configure {
 
 =head2 bus
 
-Event bus. Used for sharing global events.
+Event bus. Used for sharing global events such as connection closure.
 
 =cut
 
@@ -597,9 +569,9 @@ sub open_channel {
     ));
     $self->{channel_by_id}{$channel} = $c;
 	$self->debug_printf("Record channel %d as %s", $channel, $c);
-    $self->push_pending(
+    $c->push_pending(
         'Channel::OpenOk' => sub {
-            my ($self, $frame) = @_;
+            my ($c, $frame) = @_;
             {
                 my $method_frame = $frame->method_frame;
                 $self->{channel_map}{$frame->channel} = $c;
@@ -691,13 +663,12 @@ Returns $self.
 =cut
 
 sub next_pending {
-    my $self = shift;
-    my $type = shift;
-    my $frame = shift;
-    warn "Check next pending for $type\n" if DEBUG;
+    my ($self, $type, $frame) = @_;
+    $self->debug_printf("Check next pending for %s", $type);
+
     if(my $next = shift @{$self->{pending}{$type} || []}) {
 		# We have a registered handler for this frame type. This usually
-		# means that we've sent a message and are awaiting a response.
+		# means that we've sent a frame and are awaiting a response.
 		if(ref($next) eq 'ARRAY') {
 			my ($f, @args) = @$next;
 			$f->done(@args) unless $f->is_ready;
@@ -710,7 +681,7 @@ sub next_pending {
 		# or consumer cancellation if the consumer_cancel_notify
 		# option is set (RabbitMQ). We don't expect many so report
 		# them when in debug mode.
-		warn "We had no pending handlers for $type, raising as event" if DEBUG;
+		$self->debug_printf("We had no pending handlers for %s, raising as event", $type);
 		$self->bus->invoke_event(
 			unexpected_frame => $type, $frame
 		);
@@ -754,7 +725,8 @@ sub user { shift->{user} }
 
 =head2 frame_max
 
-Maximum number of bytes allowed in any given frame.
+Maximum number of bytes allowed in any given frame. This is the
+value negotiated with the remote server.
 
 =cut
 
@@ -768,7 +740,7 @@ sub frame_max {
 
 =head2 channel_max
 
-Maximum number of channels.
+Maximum number of channels. This is whatever we ended up with after initial negotiation.
 
 =cut
 
@@ -782,8 +754,7 @@ sub channel_max {
 
 =head2 last_frame_time
 
-Timestamp of the last frame we received from
-the remote. Used for handling heartbeats.
+Timestamp of the last frame we received from the remote. Used for handling heartbeats.
 
 =cut
 
@@ -928,71 +899,30 @@ Returns $self.
 =cut
 
 sub process_frame {
-    my $self = shift;
-    my $frame = shift;
+    my ($self, $frame) = @_;
+	if(my $ch = $self->channel_by_id($frame->channel)) {
+		return $self if $ch->next_pending($frame);
+	}
+
+    my $frame_type = $self->get_frame_type($frame);
 
 	# Basic::Deliver - we're delivering a message to a ctag
 	# Frame::Header - header part of message
 	# Frame::Body* - body content
-    warn "Processing frame $self => $frame\n" if DEBUG;
-    # First part of a frame. There's more to come, so stash a new future
-    # and return.
-    if($frame->isa('Net::AMQP::Frame::Header')) {
-		$self->{incoming_message}{$frame->channel}{type} = $frame->header_frame->type;
-        if($frame->header_frame->headers) {
-            eval {
-				$self->{incoming_message}{$frame->channel}{type} = $frame->header_frame->headers->{type}
-					if exists $frame->header_frame->headers->{type};
-				1
-			} or warn $@;
-        }
-        unless($frame->body_size) {
-            $self->{incoming_message}{$frame->channel}{payload} = '';
-            $self->{channel_map}{$frame->channel}->bus->invoke_event(
-                message => @{$self->{incoming_message}{$frame->channel}}{qw(type payload ctag dtag rkey)},
-            );
-            delete $self->{incoming_message}{$frame->channel};
-        }
-        return $self;
-    }
+    $self->debug_printf("Processing connection frame %s => %s", $self, $frame);
 
-    # Body part of an incoming message.
-    # TODO should handle multiple chunks?
-    if($frame->isa('Net::AMQP::Frame::Body')) {
-        $self->{incoming_message}{$frame->channel}{payload} = $frame->payload;
-        $self->{channel_map}{$frame->channel}->bus->invoke_event(
-            message => @{$self->{incoming_message}{$frame->channel}}{qw(type payload ctag dtag rkey)},
-        );
-        delete $self->{incoming_message}{$frame->channel};
-        return $self;
-    }
-    return $self unless $frame->can('method_frame');
-
-    my $frame_type = $self->get_frame_type($frame);
-    if($frame_type eq 'Basic::Deliver') {
-        warn "Already have incoming_message?" if DEBUG && exists $self->{incoming_message}{$frame->channel};
-        $self->{incoming_message}{$frame->channel} = {
-            ctag => $frame->method_frame->consumer_tag,
-            dtag => $frame->method_frame->delivery_tag,
-            rkey => $frame->method_frame->routing_key,
-        };
-        return $self;
-    }
+    $self->next_pending($frame_type, $frame);
+	return $self;
 
     # Any channel errors will be represented as a channel close event
     if($frame_type eq 'Channel::Close') {
-        warn "Channel was " . $frame->channel . ", calling close\n" if DEBUG;
+        $self->debug_printf("Channel was %d, calling close", $frame->channel);
         $self->channel_by_id($frame->channel)->on_close(
             $frame->method_frame
         );
         return $self;
     }
 
-	if(my $ch = $self->channel_by_id($frame->channel)) {
-		return $self if $ch->next_pending($frame_type, $frame);
-	}
-
-    $self->next_pending($frame_type, $frame);
 
     return $self;
 }

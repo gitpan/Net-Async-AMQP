@@ -1,5 +1,5 @@
 package Net::Async::AMQP::Channel;
-$Net::Async::AMQP::Channel::VERSION = '0.007';
+$Net::Async::AMQP::Channel::VERSION = '0.008';
 use strict;
 use warnings;
 
@@ -11,7 +11,7 @@ Net::Async::AMQP::Channel - represents a single channel in an MQ connection
 
 =head1 VERSION
 
-Version 0.007
+Version 0.008
 
 =head1 SYNOPSIS
 
@@ -76,11 +76,10 @@ channel once complete.
 sub confirm_mode {
     my $self = shift;
     my %args = @_;
-    warn "Attempting to switch to confirm mode\n" if DEBUG;
+    $self->debug_printf("Enabling confirm mode");
 
     my $f = $self->loop->new_future;
     my $frame = Net::AMQP::Frame::Method->new(
-#        channel => $self->id,
         method_frame => Net::AMQP::Protocol::Confirm::Select->new(
             nowait      => 0,
         )
@@ -113,14 +112,13 @@ sub exchange_declare {
     die "No exchange specified" unless exists $args{exchange};
     die "No exchange type specified" unless exists $args{type};
 
-    warn "Attempting to declare our exchange: " . $args{exchange} if DEBUG;
+    $self->debug_printf("Declaring exchange [%s]", $args{exchange});
 
     my $f = $self->loop->new_future;
     my $frame = Net::AMQP::Frame::Method->new(
-#        channel => $self->id,
         method_frame => Net::AMQP::Protocol::Exchange::Declare->new(
-            exchange    => $args{exchange},
-            type        => $args{type},
+            exchange    => Net::AMQP::Value::String->new($args{exchange}),
+            type        => Net::AMQP::Value::String->new($args{type}),
             passive     => $args{passive} || 0,
             durable     => $args{durable} || 0,
             auto_delete => $args{auto_delete} || 0,
@@ -152,9 +150,7 @@ sub queue_declare {
     my %args = @_;
     die "No queue specified" unless defined $args{queue};
 
-    warn "queue dec start\n" if DEBUG;
     $self->future->then(sub {
-        warn "queue decl\n" if DEBUG;
         my $f = $self->loop->new_future;
         $self->add_child(
 			my $q = Net::Async::AMQP::Queue->new(
@@ -169,11 +165,10 @@ sub queue_declare {
 		# triggering cleanup logic as soon as that channel
 		# goes out of scope.
 		Scalar::Util::weaken($q->{channel});
-        warn "Attempting to declare our queue" if DEBUG;
+        $self->debug_printf("Declaring queue [%s]", $args{queue});
         my $frame = Net::AMQP::Frame::Method->new(
-            channel => $self->id,
             method_frame => Net::AMQP::Protocol::Queue::Declare->new(
-                queue       => $args{queue},
+                queue       => Net::AMQP::Value::String->new($args{queue}),
                 passive     => $args{passive} || 0,
                 durable     => $args{durable} || 0,
                 exclusive   => $args{exclusive} || 0,
@@ -222,7 +217,6 @@ sub publish {
 
     $self->future->then(sub {
         my $f = $self->loop->new_future;
-        my $channel = $self->id;
 		{ # When publishing a message, we should expect either an ACK, or a return.
 		  # Since these are mutually exclusive, we also need to remove the pending
 		  # handler for the opposing event once one event has been received. Note
@@ -232,22 +226,20 @@ sub publish {
 			my $ack = sub {
 				my ($amqp, $frame) = @_;
 				my $method_frame = $frame->method_frame;
-				$amqp->remove_pending('Basic::Return' => $return);
+				$self->remove_pending('Basic::Return' => $return);
 				$f->done unless $f->is_ready;
-				weaken $f;
 				weaken $return;
 			};
 			$return = sub {
 				my ($amqp, $frame) = @_;
 				my $method_frame = $frame->method_frame;
-				$amqp->remove_pending('Basic::Ack' => $ack);
+				# $self->remove_pending('Basic::Ack' => $ack);
 				$f->fail(
                     $method_frame->reply_text,
                     code     => $method_frame->reply_code,
                     exchange => $method_frame->exchange,
                     rkey     => $method_frame->routing_key
-                ) unless $f->is_cancelled;
-				weaken $f;
+                ) unless $f->is_ready;
 				weaken $ack;
 			};
 			$self->push_pending(
@@ -260,15 +252,15 @@ sub publish {
 
         my @frames = $self->amqp->split_payload(
             $args{payload},
-            exchange         => $args{exchange},
+            exchange         => Net::AMQP::Value::String->new($args{exchange}),
             mandatory		 => $args{mandatory} // 0,
             immediate        => 0,
-            (exists $args{routing_key} ? (routing_key => $args{routing_key}) : ()),
+            (exists $args{routing_key} ? (routing_key => Net::AMQP::Value::String->new($args{routing_key})) : ()),
             ticket           => 0,
             content_type     => 'application/binary',
             content_encoding => undef,
             timestamp        => time,
-            type             => $args{type},
+            type             => Net::AMQP::Value::String->new($args{type}),
             user_id          => $self->amqp->user,
             no_ack           => 0,
 #            headers          => {
@@ -285,7 +277,6 @@ sub publish {
         );
         $self->send_frame(
             $_,
-#            channel => $channel,
         ) for @frames;
         $f
     })
@@ -320,7 +311,6 @@ sub qos {
         );
 
         my $frame = Net::AMQP::Frame::Method->new(
-#            channel => $self->id,
             method_frame => Net::AMQP::Protocol::Basic::Qos->new(
                 nowait         => 0,
                 prefetch_count => $args{prefetch_count},
@@ -353,11 +343,10 @@ sub ack {
     $self->future->on_done(sub {
         my $channel = $id;
         my $frame = Net::AMQP::Frame::Method->new(
-#            channel => $id,
             method_frame => Net::AMQP::Protocol::Basic::Ack->new(
                # nowait      => 0,
 				delivery_tag => $args{delivery_tag},
-				multiple	=> $args{multiple} // 0,
+				multiple     => $args{multiple} // 0,
             )
         );
         $self->send_frame($frame);
@@ -371,7 +360,7 @@ Example output:
         'method_id' => 40,
         'reply_code' => 404,
         'class_id' => 60,
-        'reply_text' => 'NOT_FOUND - no exchange \'invalidchan\' in vhost \'mv\''
+        'reply_text' => 'NOT_FOUND - no exchange \'invalidchan\' in vhost \'vhost\''
 
 =cut
 
@@ -424,11 +413,10 @@ channel instance once the operation is complete.
 sub close {
     my $self = shift;
     my %args = @_;
-    warn "Closing channel " . $self->id . "\n" if DEBUG;
+    $self->debug_printf("Close channel %d", $self->id);
 
     my $f = $self->loop->new_future;
     my $frame = Net::AMQP::Frame::Method->new(
-#        channel => $self->id,
         method_frame => Net::AMQP::Protocol::Channel::Close->new(
 			reply_code  => $args{code} // 404,
 			reply_text  => $args{text} // 'closing',
@@ -498,10 +486,46 @@ Returns $self.
 =cut
 
 sub next_pending {
-    my $self = shift;
-    my $type = shift;
-    my $frame = shift;
-    warn "Check next pending for $type\n" if DEBUG;
+    my ($self, $frame) = @_;
+
+    # First part of a frame. There's more to come, so stash a new future
+    # and return.
+    if($frame->isa('Net::AMQP::Frame::Header')) {
+		$self->{incoming_message}{type} = $frame->header_frame->type;
+        if($frame->header_frame->headers) {
+            eval {
+				$self->{incoming_message}{type} = $frame->header_frame->headers->{type}
+					if exists $frame->header_frame->headers->{type};
+				1
+			} or $self->debug_printf("Unexpected exception while doing something: %s", $@);
+        }
+
+		# Messages may be empty - in this case we'd have no body frames at all, we're done already:
+        unless($frame->body_size) {
+            $self->{incoming_message}{payload} = '';
+            $self->bus->invoke_event(
+                message => @{$self->{incoming_message}}{qw(type payload ctag dtag rkey)},
+            );
+            delete $self->{incoming_message};
+        }
+
+        return $self;
+    }
+
+    # Body part of an incoming message.
+    # TODO should handle multiple chunks?
+    if($frame->isa('Net::AMQP::Frame::Body')) {
+        $self->{incoming_message}{payload} = $frame->payload;
+        $self->bus->invoke_event(
+            message => @{$self->{incoming_message}}{qw(type payload ctag dtag rkey)},
+        );
+        delete $self->{incoming_message};
+        return $self;
+    }
+
+    return $self unless $frame->can('method_frame') && (my $method_frame = $frame->method_frame);
+    my $type = $self->amqp->get_frame_type($frame);
+
     if(my $next = shift @{$self->{pending}{$type} || []}) {
 		# We have a registered handler for this frame type. This usually
 		# means that we've sent a message and are awaiting a response.
@@ -511,19 +535,36 @@ sub next_pending {
 		} else {
 			$next->($self, $frame, @_);
 		}
-	} else {
-		# It's quite possible we'll see unsolicited frames back from
-		# the server: these will typically be errors, connection close,
-		# or consumer cancellation if the consumer_cancel_notify
-		# option is set (RabbitMQ). We don't expect many so report
-		# them when in debug mode.
-		return undef;
-		warn "We had no pending handlers for $type, raising as event" if DEBUG;
-		$self->bus->invoke_event(
-			unexpected_frame => $type, $frame
-		);
+		return $self;
 	}
-    $self
+
+	# Message delivery, part 3: The "Deliver" message.
+	# This is actually where we start.
+    if($type eq 'Basic::Deliver') {
+        $self->debug_printf("Already have incoming_message?") if exists $self->{incoming_message};
+        $self->{incoming_message} = {
+            ctag => $method_frame->consumer_tag,
+            dtag => $method_frame->delivery_tag,
+            rkey => $method_frame->routing_key,
+        };
+        return $self;
+    }
+
+    if($type eq 'Channel::Close') {
+        $self->debug_printf("Channel was %d, calling close", $frame->channel);
+        $self->on_close(
+            $method_frame
+        );
+        return $self;
+    }
+
+	# It's quite possible we'll see unsolicited frames back from
+	# the server: these will typically be errors, connection close,
+	# or consumer cancellation if the consumer_cancel_notify
+	# option is set (RabbitMQ). We don't expect many so report
+	# them when in debug mode.
+	$self->debug_printf("We had no pending handlers for [%s]", $type);
+	return undef;
 }
 
 =head1 METHODS - Accessors
@@ -582,30 +623,6 @@ sub as_string {
 	sprintf "Channel[%d]", $self->id;
 }
 
-{
-package Net::Async::AMQP::Channel::Helper;
-$Net::Async::AMQP::Channel::Helper::VERSION = '0.007';
-sub new { bless { channel => $_[1] }, $_[0] }
-sub channel { shift->{channel} }
-sub DESTROY {
-	my $self = shift;
-	$self->channel->release if $self->channel;
-}
-
-our $AUTOLOAD;
-sub AUTOLOAD {
-	my $self = shift;
-	(my $method = $AUTOLOAD) =~ s/^.*:://;
-	warn "Adding new autoload method $method\n";
-	my $code = $self->channel->${\"curry::weak::$method"}->();
-	*{"__PACKAGE__::$method"} = $code;
-	$code->(@_);
-}
-
-sub diagnostics {
-	my ($d, $level) = @_;
-}
-}
 1;
 
 __END__

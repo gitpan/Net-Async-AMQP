@@ -1,5 +1,5 @@
 package Net::Async::AMQP::ConnectionManager::Channel;
-$Net::Async::AMQP::ConnectionManager::Channel::VERSION = '0.007';
+$Net::Async::AMQP::ConnectionManager::Channel::VERSION = '0.008';
 use strict;
 use warnings;
 
@@ -9,7 +9,7 @@ Net::Async::AMQP::ConnectionManager::Channel - channel proxy object
 
 =head1 VERSION
 
-Version 0.007
+Version 0.008
 
 =cut
 
@@ -145,7 +145,7 @@ sub DESTROY {
 		]
 	)->on_ready(sub {
 		my $conman = delete $self->{manager};
-		$conman->release_channel(delete $self->{channel});
+		$conman->release_channel(delete $self->{channel}) if $conman;
 		undef $f;
 	});
 }

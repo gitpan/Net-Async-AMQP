@@ -1,5 +1,5 @@
 package Net::Async::AMQP::Queue;
-$Net::Async::AMQP::Queue::VERSION = '0.007';
+$Net::Async::AMQP::Queue::VERSION = '0.008';
 use strict;
 use warnings;
 
@@ -11,7 +11,7 @@ Net::Async::AMQP - provides client interface to AMQP using L<IO::Async>
 
 =head1 VERSION
 
-Version 0.007
+Version 0.008
 
 =head1 SYNOPSIS
 
@@ -34,12 +34,9 @@ Version 0.007
 use Future;
 use curry::weak;
 use Class::ISA ();
-use Data::Dumper;
 use Scalar::Util qw(weaken);
 
 use Net::Async::AMQP;
-
-use constant DEBUG => Net::Async::AMQP->DEBUG;
 
 =head1 ACCESSORS
 
@@ -90,11 +87,11 @@ sub listen {
     # Attempt to bind after we've successfully declared the exchange.
     $self->future->then(sub {
         my $f = $self->loop->new_future;
-        warn "Attempting to listen for events on queue [" . $self->queue_name . "]\n" if DEBUG;
+        $self->debug_printf("Attempting to listen for events on queue [%s]", $self->queue_name);
 
         my $frame = Net::AMQP::Protocol::Basic::Consume->new(
-            queue        => $self->queue_name,
-            consumer_tag => '',
+            queue        => Net::AMQP::Value::String->new($self->queue_name),
+            consumer_tag => (exists $args{consumer_tag} ? Net::AMQP::Value::String->new($args{consumer_tag}) : ''),
             no_local     => 0,
             no_ack       => ($args{ack} ? 0 : 1),
             exclusive    => 0,
@@ -151,10 +148,10 @@ sub cancel {
 
     # Attempt to bind after we've successfully declared the exchange.
 	$self->future->then(sub {
-		warn "Attempting to cancel consumer [" . $args{consumer_tag} . "]\n" if DEBUG;
+		$self->debug_printf("Attempting to cancel consumer [%s]", $args{consumer_tag});
 
 		my $frame = Net::AMQP::Protocol::Basic::Cancel->new(
-			consumer_tag => $args{consumer_tag},
+			consumer_tag => Net::AMQP::Value::String->new($args{consumer_tag}),
 			nowait       => 0,
 		);
 		$self->push_pending(
@@ -180,14 +177,13 @@ sub bind_exchange {
     # Attempt to bind after we've successfully declared the exchange.
     $self->future->then(sub {
         my $f = $self->loop->new_future;
-        warn "Attempting to bind our queue [" . $self->queue_name . "] to exchange [" . $args{exchange} . "]" if DEBUG;
+        $self->debug_printf("Binding queue [%s] to exchange [%s] with rkey [%s]", $self->queue_name, $args{exchange}, $args{routing_key} // '(none)');
 
         my $frame = Net::AMQP::Frame::Method->new(
-#            channel => $self->channel->id,
             method_frame => Net::AMQP::Protocol::Queue::Bind->new(
-                queue       => $self->queue_name,
-                exchange    => $args{exchange},
-                (exists($args{routing_key}) ? ('routing_key' => $args{routing_key}) : ()),
+                queue       => Net::AMQP::Value::String->new($self->queue_name),
+                exchange    => Net::AMQP::Value::String->new($args{exchange}),
+                (exists($args{routing_key}) ? ('routing_key' => Net::AMQP::Value::String->new($args{routing_key})) : ()),
                 ticket      => 0,
                 nowait      => 0,
             )
@@ -213,12 +209,11 @@ sub delete {
     # Attempt to bind after we've successfully declared the exchange.
     $self->future->then(sub {
         my $f = $self->loop->new_future;
-        warn "Attempting to delete queue [" . $self->queue_name . "]" if DEBUG;
+        $self->debug_printf("Deleting queue [%s]", $self->queue_name);
 
         my $frame = Net::AMQP::Frame::Method->new(
-#            channel => $self->channel->id,
             method_frame => Net::AMQP::Protocol::Queue::Delete->new(
-                queue       => $self->queue_name,
+                queue       => Net::AMQP::Value::String->new($self->queue_name),
                 nowait      => 0,
             )
         );

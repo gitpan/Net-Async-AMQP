@@ -16,7 +16,7 @@ Net::Async::AMQP::Channel - represents a single channel in an MQ connection
 
 =head1 VERSION
 
-Version 0.007
+Version 0.008
 
 =head1 SYNOPSIS
 
@@ -112,7 +112,7 @@ Example output:
         'method_id' => 40,
         'reply_code' => 404,
         'class_id' => 60,
-        'reply_text' => 'NOT_FOUND - no exchange \'invalidchan\' in vhost \'mv\''
+        'reply_text' => 'NOT_FOUND - no exchange \'invalidchan\' in vhost \'vhost\''
 
 =head2 on_close
 

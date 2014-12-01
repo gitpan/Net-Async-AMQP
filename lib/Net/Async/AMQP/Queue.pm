@@ -1,5 +1,5 @@
 package Net::Async::AMQP::Queue;
-$Net::Async::AMQP::Queue::VERSION = '0.008';
+$Net::Async::AMQP::Queue::VERSION = '0.009';
 use strict;
 use warnings;
 
@@ -11,7 +11,7 @@ Net::Async::AMQP - provides client interface to AMQP using L<IO::Async>
 
 =head1 VERSION
 
-Version 0.008
+version 0.009
 
 =head1 SYNOPSIS
 
@@ -241,7 +241,7 @@ __END__
 
 =head1 AUTHOR
 
-Tom Molesworth <cpan@entitymodel.com>
+Tom Molesworth <cpan@perlsite.co.uk>
 
 =head1 LICENSE
 

@@ -1,5 +1,5 @@
 package Net::Async::AMQP::ConnectionManager::Channel;
-$Net::Async::AMQP::ConnectionManager::Channel::VERSION = '0.008';
+$Net::Async::AMQP::ConnectionManager::Channel::VERSION = '0.009';
 use strict;
 use warnings;
 
@@ -9,7 +9,7 @@ Net::Async::AMQP::ConnectionManager::Channel - channel proxy object
 
 =head1 VERSION
 
-Version 0.008
+version 0.009
 
 =cut
 
@@ -132,20 +132,23 @@ sub DESTROY {
 	unless($self->{cleanup}) {
 #		warn "Releasing $self without cleanup\n";
 		my $conman = delete $self->{manager};
-		return $conman->release_channel(delete $self->{channel});
+		my $ch = delete $self->{channel};
+		return unless $conman; # global destruct
+		return $conman->release_channel($ch);
 	}
 
 #	warn "Releasing $self\n";
 	my $f;
 	$f = (
 		fmap_void {
-			$_->($self)
+			$_ ? $_->($self) : Future->wrap
 		} foreach => [
 			sort values %{$self->{cleanup}}
 		]
 	)->on_ready(sub {
 		my $conman = delete $self->{manager};
-		$conman->release_channel(delete $self->{channel}) if $conman;
+		my $ch = delete $self->{channel};
+		$conman->release_channel($ch) if $conman;
 		undef $f;
 	});
 }

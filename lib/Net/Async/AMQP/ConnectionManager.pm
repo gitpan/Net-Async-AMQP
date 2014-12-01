@@ -1,5 +1,5 @@
 package Net::Async::AMQP::ConnectionManager;
-$Net::Async::AMQP::ConnectionManager::VERSION = '0.008';
+$Net::Async::AMQP::ConnectionManager::VERSION = '0.009';
 use strict;
 use warnings;
 
@@ -11,7 +11,7 @@ Net::Async::AMQP::ConnectionManager - handle MQ connections
 
 =head1 VERSION
 
-Version 0.008
+version 0.009
 
 =head1 SYNOPSIS
 
@@ -62,7 +62,7 @@ use Net::Async::AMQP::ConnectionManager::Connection;
 =head2 Channel management
 
 Each connection has N total available channels, recorded in a hash. The total number
-of channels per connection is negotiated via the intial AMQP Tune/TuneOk sequence on
+of channels per connection is negotiated via the initial AMQP Tune/TuneOk sequence on
 connection.
 
 We also maintain lists:
@@ -443,4 +443,4 @@ __END__
 
 =head1 AUTHOR
 
-Tom Molesworth <cpan@entitymodel.com>
+Tom Molesworth <cpan@perlsite.co.uk>

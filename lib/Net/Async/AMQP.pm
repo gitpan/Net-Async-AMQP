@@ -5,7 +5,7 @@ use warnings;
 
 use parent qw(IO::Async::Notifier);
 
-our $VERSION = '0.008';
+our $VERSION = '0.009';
 
 =head1 NAME
 
@@ -13,7 +13,7 @@ Net::Async::AMQP - provides client interface to AMQP using L<IO::Async>
 
 =head1 VERSION
 
-Version 0.008
+version 0.009
 
 =head1 SYNOPSIS
 
@@ -134,6 +134,7 @@ be set before you C<use> this module.
 =cut
 
 our $XML_SPEC;
+our $SPEC_LOADED;
 BEGIN {
 	$XML_SPEC //= File::ShareDir::dist_file(
 		'Net-Async-AMQP',
@@ -142,7 +143,7 @@ BEGIN {
 
 	# Load the appropriate protocol definitions. RabbitMQ uses a
 	# modified version of AMQP 0.9.1
-	Net::AMQP::Protocol->load_xml_spec($XML_SPEC);
+	Net::AMQP::Protocol->load_xml_spec($XML_SPEC) unless $SPEC_LOADED++;
 }
 
 =head1 %CONNECTION_DEFAULTS
@@ -870,8 +871,10 @@ Returns string representing type, typically the base class with Net::AMQP::Proto
 { # We cache the lookups since they're unlikely to change during the application lifecycle
 my %types;
 sub get_frame_type {
-    my $self = shift;
-    my $frame = shift->method_frame;
+    my ($self, $raw_frame) = @_;
+	return 'Heartbeat' if $raw_frame->isa('Net::AMQP::Frame::Heartbeat');
+
+    my $frame = $raw_frame->method_frame;
     my $ref = ref $frame;
     return $types{$ref} if exists $types{$ref};
     my $re = qr/^Net::AMQP::Protocol::([^:]+::[^:]+)$/;
@@ -909,9 +912,14 @@ sub process_frame {
 	# Basic::Deliver - we're delivering a message to a ctag
 	# Frame::Header - header part of message
 	# Frame::Body* - body content
-    $self->debug_printf("Processing connection frame %s => %s", $self, $frame);
-
-    $self->next_pending($frame_type, $frame);
+	if($frame_type eq 'Heartbeat') {
+		# Ignore these completely. Since we have the last frame update at the data-read
+		# level, there's nothing for us to do here.
+		$self->debug_printf("Heartbeat received");
+	} else {
+		$self->debug_printf("Processing connection frame %s => %s", $self, $frame);
+		$self->next_pending($frame_type, $frame);
+	}
 	return $self;
 
     # Any channel errors will be represented as a channel close event
@@ -1125,7 +1133,7 @@ specification into appropriate Perl methods and classes.
 
 =head1 AUTHOR
 
-Tom Molesworth <cpan@entitymodel.com>
+Tom Molesworth <cpan@perlsite.co.uk>
 
 =head1 LICENSE
 

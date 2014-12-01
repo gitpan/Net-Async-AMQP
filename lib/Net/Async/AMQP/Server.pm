@@ -1,5 +1,5 @@
 package Net::Async::AMQP::Server;
-$Net::Async::AMQP::Server::VERSION = '0.008';
+$Net::Async::AMQP::Server::VERSION = '0.009';
 use strict;
 use warnings;
 
@@ -18,7 +18,7 @@ use Net::Async::AMQP::Server::Connection;
 
 Set up the instance.
 
-Takes teh following named parameters:
+Takes the following named parameters:
 
 =over 4
 

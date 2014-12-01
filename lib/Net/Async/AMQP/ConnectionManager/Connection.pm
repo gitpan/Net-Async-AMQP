@@ -1,5 +1,5 @@
 package Net::Async::AMQP::ConnectionManager::Connection;
-$Net::Async::AMQP::ConnectionManager::Connection::VERSION = '0.008';
+$Net::Async::AMQP::ConnectionManager::Connection::VERSION = '0.009';
 use strict;
 use warnings;
 
@@ -9,7 +9,7 @@ Net::Async::AMQP::ConnectionManager::Connection - connection proxy object
 
 =head1 VERSION
 
-Version 0.008
+version 0.009
 
 =head1 METHODS
 

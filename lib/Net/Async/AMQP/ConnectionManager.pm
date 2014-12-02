@@ -1,5 +1,5 @@
 package Net::Async::AMQP::ConnectionManager;
-$Net::Async::AMQP::ConnectionManager::VERSION = '0.009';
+$Net::Async::AMQP::ConnectionManager::VERSION = '0.010';
 use strict;
 use warnings;
 
@@ -11,7 +11,7 @@ Net::Async::AMQP::ConnectionManager - handle MQ connections
 
 =head1 VERSION
 
-version 0.009
+version 0.010
 
 =head1 SYNOPSIS
 
@@ -322,6 +322,7 @@ sub connect {
 	$self->add_child(
 		my $amqp = Net::Async::AMQP->new
 	);
+	$amqp->configure(heartbeat_interval => delete $args{heartbeat}) if exists $args{heartbeat};
 	$args{port} ||= 5672;
 	$amqp->connect(
 		%args

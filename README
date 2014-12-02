@@ -1,7 +1,7 @@
 
 
 This archive contains the distribution Net-Async-AMQP,
-version 0.009:
+version 0.010:
 
   IO::Async support for the AMQP protocol
 

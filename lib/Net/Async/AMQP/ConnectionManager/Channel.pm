@@ -1,5 +1,5 @@
 package Net::Async::AMQP::ConnectionManager::Channel;
-$Net::Async::AMQP::ConnectionManager::Channel::VERSION = '0.009';
+$Net::Async::AMQP::ConnectionManager::Channel::VERSION = '0.010';
 use strict;
 use warnings;
 
@@ -9,7 +9,7 @@ Net::Async::AMQP::ConnectionManager::Channel - channel proxy object
 
 =head1 VERSION
 
-version 0.009
+version 0.010
 
 =cut
 

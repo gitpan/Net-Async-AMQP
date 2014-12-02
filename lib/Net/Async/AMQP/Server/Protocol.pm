@@ -1,5 +1,5 @@
 package Net::Async::AMQP::Server::Protocol;
-$Net::Async::AMQP::Server::Protocol::VERSION = '0.009';
+$Net::Async::AMQP::Server::Protocol::VERSION = '0.010';
 use strict;
 use warnings;
 

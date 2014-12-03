@@ -1,5 +1,5 @@
 package Net::Async::AMQP::ConnectionManager;
-$Net::Async::AMQP::ConnectionManager::VERSION = '0.010';
+$Net::Async::AMQP::ConnectionManager::VERSION = '0.011';
 use strict;
 use warnings;
 
@@ -11,7 +11,7 @@ Net::Async::AMQP::ConnectionManager - handle MQ connections
 
 =head1 VERSION
 
-version 0.010
+version 0.011
 
 =head1 SYNOPSIS
 

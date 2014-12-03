@@ -5,7 +5,7 @@ use warnings;
 
 use parent qw(IO::Async::Notifier);
 
-our $VERSION = '0.010';
+our $VERSION = '0.011';
 
 =head1 NAME
 
@@ -13,7 +13,7 @@ Net::Async::AMQP - provides client interface to AMQP using L<IO::Async>
 
 =head1 VERSION
 
-version 0.010
+version 0.011
 
 =head1 SYNOPSIS
 
@@ -387,6 +387,7 @@ Sends the heartbeat frame.
 
 sub send_heartbeat {
     my $self = shift;
+	$self->debug_printf("Sending heartbeat frame");
 
     # Heartbeat messages apply to the connection rather than
     # individual channels, so we use channel 0 to represent this
@@ -394,6 +395,12 @@ sub send_heartbeat {
         Net::AMQP::Frame::Heartbeat->new,
         channel => 0,
     );
+
+	# Ensure heartbeat timer is active for next time
+	if(my $timer = $self->heartbeat_timer) {
+		$timer->reset;
+		$timer->start;
+	}
 }
 
 =head2 post_connect
@@ -873,6 +880,8 @@ my %types;
 sub get_frame_type {
     my ($self, $raw_frame) = @_;
 	return 'Heartbeat' if $raw_frame->isa('Net::AMQP::Frame::Heartbeat');
+	return 'Header' if $raw_frame->isa('Net::AMQP::Frame::Header');
+	return 'Body' if $raw_frame->isa('Net::AMQP::Frame::Body');
 
     my $frame = $raw_frame->method_frame;
     my $ref = ref $frame;
@@ -903,11 +912,12 @@ Returns $self.
 
 sub process_frame {
     my ($self, $frame) = @_;
+    my $frame_type = $self->get_frame_type($frame);
 	if(my $ch = $self->channel_by_id($frame->channel)) {
+		$self->debug_printf("Processing frame %s on channel %d", $frame_type, $ch);
 		return $self if $ch->next_pending($frame);
 	}
-
-    my $frame_type = $self->get_frame_type($frame);
+	$self->debug_printf("Processing connection frame %s", $frame_type);
 
 	# Basic::Deliver - we're delivering a message to a ctag
 	# Frame::Header - header part of message

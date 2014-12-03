@@ -1,5 +1,5 @@
 package Net::Async::AMQP::Channel;
-$Net::Async::AMQP::Channel::VERSION = '0.010';
+$Net::Async::AMQP::Channel::VERSION = '0.011';
 use strict;
 use warnings;
 
@@ -11,7 +11,7 @@ Net::Async::AMQP::Channel - represents a single channel in an MQ connection
 
 =head1 VERSION
 
-version 0.010
+version 0.011
 
 =head1 SYNOPSIS
 
@@ -525,6 +525,14 @@ sub next_pending {
 
     return $self unless $frame->can('method_frame') && (my $method_frame = $frame->method_frame);
     my $type = $self->amqp->get_frame_type($frame);
+	if($type eq 'Basic::CancelOk') {
+		my ($ctag) = ($method_frame->consumer_tag);
+        $self->debug_printf("Cancel $ctag");
+		$self->bus->invoke_event(
+			'cancel',
+			ctag => $ctag,
+		);
+	}
 
     if(my $next = shift @{$self->{pending}{$type} || []}) {
 		# We have a registered handler for this frame type. This usually

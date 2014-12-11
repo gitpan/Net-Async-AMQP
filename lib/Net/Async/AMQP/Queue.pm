@@ -1,5 +1,5 @@
 package Net::Async::AMQP::Queue;
-$Net::Async::AMQP::Queue::VERSION = '0.011';
+$Net::Async::AMQP::Queue::VERSION = '0.012';
 use strict;
 use warnings;
 
@@ -11,7 +11,7 @@ Net::Async::AMQP - provides client interface to AMQP using L<IO::Async>
 
 =head1 VERSION
 
-version 0.011
+version 0.012
 
 =head1 SYNOPSIS
 
@@ -70,15 +70,23 @@ sub channel { shift->{channel} }
 
 =cut
 
-=head1 PROXIED METHODS
-
-The following methods are proxied to the L<Net::Async::AMQP> class.
+=head1 PROXIED METHODS - Net::Async::AMQP
 
 =cut
 
 sub write { shift->amqp->write(@_) }
+
+=head1 PROXIED METHODS - Net::Async::AMQP::Channel
+
+=cut
+
 sub send_frame { shift->channel->send_frame(@_) }
 sub push_pending { shift->channel->push_pending(@_) }
+sub closure_protection { shift->channel->closure_protection(@_) }
+
+=head1 METHODS
+
+=cut
 
 sub listen {
     my $self = shift;
@@ -126,6 +134,7 @@ sub listen {
                 $f->done($self => $ctag) unless $f->is_ready;
             })
         );
+		$self->closure_protection($f);
         $self->send_frame($frame);
         $f;
     });
@@ -164,6 +173,7 @@ sub cancel {
 				$f->done($self => $ctag) unless $f->is_cancelled;
 			})
 		);
+		$self->closure_protection($f);
 		$self->send_frame($frame);
 		$f;
 	});
@@ -191,6 +201,7 @@ sub bind_exchange {
         $self->push_pending(
             'Queue::BindOk' => [ $f, $self ],
         );
+		$self->closure_protection($f);
         $self->send_frame($frame);
         $f
     });
@@ -202,11 +213,10 @@ Deletes this queue.
 
 =cut
 
-sub delete {
+sub delete : method {
     my $self = shift;
     my %args = @_;
 
-    # Attempt to bind after we've successfully declared the exchange.
     $self->future->then(sub {
         my $f = $self->loop->new_future;
         $self->debug_printf("Deleting queue [%s]", $self->queue_name);
@@ -220,6 +230,7 @@ sub delete {
         $self->push_pending(
             'Queue::DeleteOk' => [ $f, $self ],
         );
+		$self->closure_protection($f);
         $self->send_frame($frame);
         $f
     });
@@ -245,4 +256,8 @@ Tom Molesworth <cpan@perlsite.co.uk>
 
 =head1 LICENSE
 
-Licensed under the same terms as Perl itself.
+Licensed under the same terms as Perl itself, with additional licensing
+terms for the MQ spec to be found in C<share/amqp0-9-1.extended.xml>
+('a worldwide, perpetual, royalty-free, nontransferable, nonexclusive
+license to (i) copy, display, distribute and implement the Advanced
+Messaging Queue Protocol ("AMQP") Specification').

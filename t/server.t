@@ -26,8 +26,7 @@ $cli->bus->subscribe_to_event(
 );
 
 my $true = Net::AMQP::Value->true;
-
-$cli->connect(
+ok($cli->connect(
 	host  => $host,
 	port  => $port,
 	user  => 'guest',
@@ -39,7 +38,8 @@ $cli->connect(
 			'consumer_cancel_notify' => $true,
 		},
 	},
-)->get;
-$cli->close->get;
+)->get, 'connect to server');
+#ok($cli->open_channel->get, 'open channel');
+ok($cli->close->get, 'close connection again');
 done_testing;
 

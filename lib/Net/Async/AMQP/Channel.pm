@@ -1,5 +1,5 @@
 package Net::Async::AMQP::Channel;
-$Net::Async::AMQP::Channel::VERSION = '0.011';
+$Net::Async::AMQP::Channel::VERSION = '0.012';
 use strict;
 use warnings;
 
@@ -11,22 +11,37 @@ Net::Async::AMQP::Channel - represents a single channel in an MQ connection
 
 =head1 VERSION
 
-version 0.011
+version 0.012
 
 =head1 SYNOPSIS
 
  use IO::Async::Loop;
  use Net::Async::AMQP;
- my $amqp = Net::Async::AMQP->new(loop => my $loop = IO::Async::Loop->new);
+ my $loop = IO::Async::Loop->new;
+ $loop->add(my $amqp = Net::Async::AMQP->new);
  $amqp->connect(
    host => 'localhost',
    username => 'guest',
    password => 'guest',
-   on_connected => sub {
-   }
- );
+ )->then(sub {
+  shift->open_channel->publish(
+   type => 'application/json'
+  )
+ });
 
 =head1 DESCRIPTION
+
+Each Net::Async::AMQP::Channel instance represents a virtual channel for
+communicating with the MQ server.
+
+Channels are layered over the TCP protocol and most of the common AMQP frames
+operate at channel level - typically you'd connect to the server, open one
+channel for one-shot requests such as binding/declaring/publishing, and a further
+channel for every consumer.
+
+Since any error typically results in a closed channel, it's not recommended to
+have multiple consumers on the same channel if there's any chance the Basic.Consume
+request will fail.
 
 =cut
 
@@ -66,6 +81,11 @@ Switches confirmation mode on for this channel.
 In confirm mode, all messages must be ACKed
 explicitly after delivery.
 
+Note that this is an irreversible operation - once
+confirm mode has been enabled on a channel, closing that
+channel and reopening is the only way to turn off confirm
+mode again.
+
 Returns a L<Future> which will resolve with this
 channel once complete.
 
@@ -87,6 +107,7 @@ sub confirm_mode {
     $self->push_pending(
         'Confirm::SelectOk' => [ $f, $self ]
     );
+	$self->closure_protection($f);
     $self->send_frame($frame);
     return $f;
 }
@@ -130,6 +151,7 @@ sub exchange_declare {
     $self->push_pending(
         'Exchange::DeclareOk' => [ $f, $self ]
     );
+	$self->closure_protection($f);
     $self->send_frame($frame);
     return $f;
 }
@@ -190,6 +212,7 @@ sub queue_declare {
                 $f->done($q) unless $f->is_ready;
             }
         );
+		$self->closure_protection($f);
         $self->send_frame($frame);
         $f;
     })
@@ -275,6 +298,7 @@ sub publish {
             cluster_id       => undef,
             weight           => 0,
         );
+		$self->closure_protection($f);
         $self->send_frame(
             $_,
         ) for @frames;
@@ -317,6 +341,7 @@ sub qos {
                 prefetch_size  => $args{prefetch_size} || 0,
             )
         );
+		$self->closure_protection($f);
         $self->send_frame($frame);
         $f
     });
@@ -425,6 +450,7 @@ sub close {
     $self->push_pending(
         'Channel::CloseOk' => [ $f, $self ],
     );
+	$self->closure_protection($f);
     $self->send_frame($frame);
     return $f;
 }
@@ -474,8 +500,6 @@ and calls it.
 Takes the following parameters:
 
 =over 4
-
-=item * $type - the frame type, such as 'Basic::ConnectOk'
 
 =item * $frame - the frame itself
 
@@ -534,18 +558,6 @@ sub next_pending {
 		);
 	}
 
-    if(my $next = shift @{$self->{pending}{$type} || []}) {
-		# We have a registered handler for this frame type. This usually
-		# means that we've sent a message and are awaiting a response.
-		if(ref($next) eq 'ARRAY') {
-			my ($f, @args) = @$next;
-			$f->done(@args) unless $f->is_ready;
-		} else {
-			$next->($self, $frame, @_);
-		}
-		return $self;
-	}
-
 	# Message delivery, part 3: The "Deliver" message.
 	# This is actually where we start.
     if($type eq 'Basic::Deliver') {
@@ -566,13 +578,22 @@ sub next_pending {
         return $self;
     }
 
+    if(my $next = shift @{$self->{pending}{$type} || []}) {
+		# We have a registered handler for this frame type. This usually
+		# means that we've sent a message and are awaiting a response.
+		if(ref($next) eq 'ARRAY') {
+			my ($f, @args) = @$next;
+			$f->done(@args) unless $f->is_ready;
+		} else {
+			$next->($self, $frame, @_);
+		}
+		return $self;
+	}
+
 	# It's quite possible we'll see unsolicited frames back from
-	# the server: these will typically be errors, connection close,
-	# or consumer cancellation if the consumer_cancel_notify
-	# option is set (RabbitMQ). We don't expect many so report
-	# them when in debug mode.
+	# the server. We don't expect many so report them when in debug mode.
 	$self->debug_printf("We had no pending handlers for [%s]", $type);
-	return undef;
+	return $self;
 }
 
 =head1 METHODS - Accessors
@@ -631,6 +652,24 @@ sub as_string {
 	sprintf "Channel[%d]", $self->id;
 }
 
+sub closure_protection {
+	my ($self, $f) = @_;
+	my @ev;
+	my $bus = $self->bus;
+	$f->on_ready(sub {
+		$bus->unsubscribe_from_event(@ev);
+		@ev = ();
+	});
+	$bus->subscribe_to_event(
+		@ev = (close => sub {
+			my ($ev, @args) = @_;
+			warn "Closed channel - @args\n";
+			$f->fail(closed => @args) unless $f->is_ready;
+		})
+	);
+	$f
+}
+
 1;
 
 __END__
@@ -641,4 +680,8 @@ Tom Molesworth <cpan@perlsite.co.uk>
 
 =head1 LICENSE
 
-Licensed under the same terms as Perl itself.
+Licensed under the same terms as Perl itself, with additional licensing
+terms for the MQ spec to be found in C<share/amqp0-9-1.extended.xml>
+('a worldwide, perpetual, royalty-free, nontransferable, nonexclusive
+license to (i) copy, display, distribute and implement the Advanced
+Messaging Queue Protocol ("AMQP") Specification').

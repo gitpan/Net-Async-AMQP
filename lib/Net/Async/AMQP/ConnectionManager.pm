@@ -1,5 +1,5 @@
 package Net::Async::AMQP::ConnectionManager;
-$Net::Async::AMQP::ConnectionManager::VERSION = '0.013';
+$Net::Async::AMQP::ConnectionManager::VERSION = '0.014';
 use strict;
 use warnings;
 
@@ -11,7 +11,7 @@ Net::Async::AMQP::ConnectionManager - handle MQ connections
 
 =head1 VERSION
 
-version 0.013
+version 0.014
 
 =head1 SYNOPSIS
 
@@ -164,7 +164,7 @@ sub request_channel {
 
 					# No spare IDs, so record this to avoid hitting this MQ connection
 					# on the next request as well
-					$self->mark_connection_full($mq);
+					$self->mark_connection_full($mq->amqp);
 
 					# We can safely fail at this point, since we're in a loop and the
 					# next iteration should get a new MQ connection to try with
@@ -294,7 +294,7 @@ sub request_connection {
 				amqp    => $mq,
 				manager => $self,
 			);
-			push @{$self->{available_connections}}, $conn;
+			push @{$self->{available_connections}}, $mq;
 			$conn
 		}
 	)->set_label(
@@ -326,6 +326,7 @@ sub connect {
 		my $amqp = Net::Async::AMQP->new
 	);
 	$amqp->configure(heartbeat_interval => delete $args{heartbeat}) if exists $args{heartbeat};
+	$amqp->configure(max_channels => delete $args{max_channels}) if exists $args{max_channels};
 	$args{port} ||= 5672;
 	$amqp->connect(
 		%args
@@ -342,10 +343,19 @@ channels.
 sub mark_connection_full {
 	my ($self, $mq) = @_;
 	# Drop this from the available connection list
-	List::UtilsBy::extract_by {
-		Scalar::Util::refaddr($_) == Scalar::Util::refaddr($mq)
-	} @{ $self->{available_connections} };
+	push @{$self->{full_connections}}, $self->extract_conn(
+		$mq,
+		$self->{available_connections}
+	);
 	$self
+}
+
+sub extract_conn {
+	my ($self, $conn, $stash) = @_;
+	my @rslt = List::UtilsBy::extract_by {
+		Scalar::Util::refaddr($_) == Scalar::Util::refaddr($conn)
+	} @$stash;
+	@rslt
 }
 
 =head2 key_for_args
@@ -370,11 +380,13 @@ sub on_channel_close {
 	$self->debug_printf("channel closure: %s", join ' ', @_);
 	my $amqp = $ch->amqp or die "This channel (" . $ch->id . ") has no AMQP connection";
 	push @{$self->{closed_channel}}, [ $amqp, $ch->id ];
-	# Add this MQ connection back to the available
+
+	# If this connection was in the full list, add it back to the available
 	# list, since it now has spare channels
-	push @{$self->{available_connections}}, $amqp unless grep {
-		Scalar::Util::refaddr($_) == Scalar::Util::refaddr($amqp)
-	} @{$self->{available_connections}};
+	push @{$self->{available_connections}}, $self->extract_conn(
+		$amqp,
+		$self->{full_connections}
+	);
 }
 
 =head2 release_channel
@@ -431,10 +443,28 @@ sub queue {
 	});
 }
 
+=head2 release_connection
+
+Releases a connection.
+
+Doesn't really do anything.
+
+=cut
+
 sub release_connection {
 	my ($self, $mq) = @_;
 	$self->debug_printf("Releasing connection %s", $mq);
-	push @{$self->{available_connections}}, $mq;
+}
+
+sub connection_count {
+	my ($self) = @_;
+	@{$self->{available_connections}} + @{$self->{full_connections}}
+}
+
+sub _add_to_loop {
+	my ($self, $loop) = @_;
+	$self->{available_connections} ||= [];
+	$self->{full_connections} ||= [];
 }
 
 sub shutdown {

@@ -1,5 +1,5 @@
 package Net::Async::AMQP::Storage;
-$Net::Async::AMQP::Storage::VERSION = '0.013';
+$Net::Async::AMQP::Storage::VERSION = '0.014';
 use strict;
 use warnings;
 

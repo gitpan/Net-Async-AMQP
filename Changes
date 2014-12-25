@@ -1,5 +1,11 @@
 Revision history for Net-Async-AMQP
 
+0.014     2014-12-25 14:31:23+00:00 Europe/London
+	New features:
+	* Support max_channels in connection manager
+	* When requesting a channel, attempt a new connection if all existing connections
+	are full (was only partially implemented previously)
+
 0.013     2014-12-25 11:33:37+00:00 Europe/London
 	This release raises the minimum Perl version requirement to 5.14,
 	for the ${^GLOBAL_PHASE} variable.

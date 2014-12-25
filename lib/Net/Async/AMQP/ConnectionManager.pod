@@ -16,7 +16,7 @@ Net::Async::AMQP::ConnectionManager - handle MQ connections
 
 =head1 VERSION
 
-version 0.013
+version 0.014
 
 =head1 SYNOPSIS
 
@@ -159,6 +159,12 @@ Releases the given channel back to our channel pool.
 Adds connection details for an AMQP server to the pool.
 
 =head2 exch
+
+=head2 release_connection
+
+Releases a connection.
+
+Doesn't really do anything.
 
 =head1 INHERITED METHODS
 

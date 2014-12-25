@@ -42,6 +42,7 @@ t/00-check-deps.t
 t/00-compile.t
 t/000-report-versions-tiny.t
 t/amqp.t
+t/conman-memory.t
 t/conman.t
 t/server-protocol.t
 t/server.t

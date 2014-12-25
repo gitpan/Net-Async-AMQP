@@ -4,19 +4,19 @@
       "Tom Molesworth <cpan@perlsite.co.uk>"
    ],
    "dynamic_config" : 0,
-   "generated_by" : "Dist::Zilla version 5.025, CPAN::Meta::Converter version 2.143240",
+   "generated_by" : "Dist::Zilla version 5.029, CPAN::Meta::Converter version 2.143240",
    "license" : [
       "perl_5"
    ],
    "meta-spec" : {
       "url" : "http://search.cpan.org/perldoc?CPAN::Meta::Spec",
-      "version" : "2"
+      "version" : 2
    },
    "name" : "Net-Async-AMQP",
    "prereqs" : {
       "build" : {
          "requires" : {
-            "perl" : "5.010001"
+            "perl" : "5.014000"
          }
       },
       "configure" : {
@@ -38,7 +38,7 @@
          "requires" : {
             "Class::ISA" : "0",
             "File::ShareDir" : "0",
-            "Future" : "0.29",
+            "Future" : "0.30",
             "IO::Async" : "0.63",
             "IO::Socket::IP" : "0",
             "List::UtilsBy" : "0",
@@ -70,6 +70,6 @@
       },
       "homepage" : "http://search.cpan.org/dist/Net-Async-AMQP/"
    },
-   "version" : "0.012"
+   "version" : "0.013"
 }
 

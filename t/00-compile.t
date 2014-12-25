@@ -6,7 +6,7 @@ use warnings;
 
 use Test::More;
 
-plan tests => 9 + ($ENV{AUTHOR_TESTING} ? 1 : 0);
+plan tests => 17 + ($ENV{AUTHOR_TESTING} ? 1 : 0);
 
 my @module_files = (
     'Net/Async/AMQP.pm',
@@ -16,8 +16,16 @@ my @module_files = (
     'Net/Async/AMQP/ConnectionManager/Connection.pm',
     'Net/Async/AMQP/Queue.pm',
     'Net/Async/AMQP/Server.pm',
+    'Net/Async/AMQP/Server/Channel.pm',
     'Net/Async/AMQP/Server/Connection.pm',
-    'Net/Async/AMQP/Server/Protocol.pm'
+    'Net/Async/AMQP/Server/Consumer.pm',
+    'Net/Async/AMQP/Server/Exchange.pm',
+    'Net/Async/AMQP/Server/Message.pm',
+    'Net/Async/AMQP/Server/Protocol.pm',
+    'Net/Async/AMQP/Server/Queue.pm',
+    'Net/Async/AMQP/Server/Storage.pm',
+    'Net/Async/AMQP/Server/VHost.pm',
+    'Net/Async/AMQP/Utils.pm'
 );
 
 

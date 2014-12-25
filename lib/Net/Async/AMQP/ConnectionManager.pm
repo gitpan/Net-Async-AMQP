@@ -1,5 +1,5 @@
 package Net::Async::AMQP::ConnectionManager;
-$Net::Async::AMQP::ConnectionManager::VERSION = '0.012';
+$Net::Async::AMQP::ConnectionManager::VERSION = '0.013';
 use strict;
 use warnings;
 
@@ -11,7 +11,7 @@ Net::Async::AMQP::ConnectionManager - handle MQ connections
 
 =head1 VERSION
 
-version 0.012
+version 0.013
 
 =head1 SYNOPSIS
 
@@ -52,6 +52,8 @@ use Future;
 use Future::Utils qw(call try_repeat fmap_void);
 
 use Time::HiRes ();
+use Scalar::Util ();
+use List::UtilsBy ();
 
 use Net::Async::AMQP;
 use Net::Async::AMQP::ConnectionManager::Channel;
@@ -77,16 +79,16 @@ We also maintain lists:
 
 Highest-assigned ID is also recorded per connection.
 
-if(have unassigned) {
-	return shift unassigned
-} elsif(have closed) {
-	my $closed = shift closed;
-	return $closed->{mq}->open_channel($closed->{id})
-} elsif(my $next_id = $mq->next_id) {
-	return $mq->open_channel($next_id)
-} else {
-
-}
+ if(have unassigned) {
+ 	return shift unassigned
+ } elsif(have closed) {
+ 	my $closed = shift closed;
+ 	return $closed->{mq}->open_channel($closed->{id})
+ } elsif(my $next_id = $mq->next_id) {
+ 	return $mq->open_channel($next_id)
+ } else {
+ 
+ }
 
 Calling methods on the channel proxy will establish
 a cycle for the duration of the pending request.
@@ -169,7 +171,7 @@ sub request_channel {
 					Future->fail(channel => 'no spare channels on connection');
 				}
 			});
-		} until => sub { shift->is_done || ++$count > 3 };
+		} until => sub { shift->is_done || ++$count > $self->channel_retry_count };
 	}
 
 	# Apply our QoS on the channel if we ever get one
@@ -195,6 +197,8 @@ sub request_channel {
 		}
 	);
 }
+
+sub channel_retry_count { 3 }
 
 =head2 apply_qos
 
@@ -248,10 +252,9 @@ sub qos_prefetch_count {
 }
 
 sub qos_confirm_mode {
-	my ($self, $ch, $k, $v) = @_;
+	my ($self, $ch) = @_;
 	return $ch->confirm_mode(
-		$k => $v
-	)->set_label("Apply $k QoS");
+	)->set_label("Apply confirm_mode QoS");
 }
 
 =head2 request_connection
@@ -338,6 +341,11 @@ channels.
 
 sub mark_connection_full {
 	my ($self, $mq) = @_;
+	# Drop this from the available connection list
+	List::UtilsBy::extract_by {
+		Scalar::Util::refaddr($_) == Scalar::Util::refaddr($mq)
+	} @{ $self->{available_connections} };
+	$self
 }
 
 =head2 key_for_args
@@ -362,6 +370,11 @@ sub on_channel_close {
 	$self->debug_printf("channel closure: %s", join ' ', @_);
 	my $amqp = $ch->amqp or die "This channel (" . $ch->id . ") has no AMQP connection";
 	push @{$self->{closed_channel}}, [ $amqp, $ch->id ];
+	# Add this MQ connection back to the available
+	# list, since it now has spare channels
+	push @{$self->{available_connections}}, $amqp unless grep {
+		Scalar::Util::refaddr($_) == Scalar::Util::refaddr($amqp)
+	} @{$self->{available_connections}};
 }
 
 =head2 release_channel

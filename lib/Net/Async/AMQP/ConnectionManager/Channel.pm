@@ -1,5 +1,5 @@
 package Net::Async::AMQP::ConnectionManager::Channel;
-$Net::Async::AMQP::ConnectionManager::Channel::VERSION = '0.012';
+$Net::Async::AMQP::ConnectionManager::Channel::VERSION = '0.013';
 use strict;
 use warnings;
 
@@ -9,9 +9,11 @@ Net::Async::AMQP::ConnectionManager::Channel - channel proxy object
 
 =head1 VERSION
 
-version 0.012
+version 0.013
 
 =cut
+
+use Time::HiRes ();
 
 use Future::Utils qw(fmap_void);
 
@@ -33,42 +35,66 @@ sub new {
 	my $class = shift;
 	my $self = bless { @_ }, $class;
 	Scalar::Util::weaken($_) for @{$self}{qw(manager channel)};
-#	warn "Acquiring $self\n";
+
+	# ->bus proxies to L<Net::Async::Channel/bus> via AUTOLOAD
 	$self->bus->subscribe_to_event(
 		my @ev = (
 			listener_start => $self->curry::weak::_listener_start,
 			listener_stop  => $self->curry::weak::_listener_stop,
 		)
 	);
+
 	$self->{cleanup}{events} = sub {
-		shift->bus->unsubscribe_from_event(@ev);
+		shift->bus->unsubscribe_from_event(splice @ev);
 		Future->wrap;
 	};
 	$self
 }
 
+=head2 _listener_start
+
+Apply cleanup handler for a consumer: since we'll be releasing the
+channel back into the general pool, any consumer that's still active
+must be cancelled first.
+
+=cut
+
 sub _listener_start {
 	my ($self, $ev, $ctag) = @_;
-	$self->{cleanup}{"listener-$ctag"} = sub {
+
+	my $k = "listener-$ctag";
+	if(exists $self->{cleanup}{$k}) {
+		# This is bad, since we should never have the same ctag twice
+		die "Already had consumer tag $ctag";
+	}
+
+	$self->{cleanup}{$k} = sub {
 		my $self = shift;
-#		warn "::: CLEANUP TASK - kill $ctag listener on $self\n";
 		Net::Async::AMQP::Queue->new(
-			amqp => $self->amqp,
+			amqp    => $self->amqp,
 			channel => $self,
-			future => Future->wrap
+			future  => Future->wrap
 		)->cancel(
 			consumer_tag => $ctag
 		)
 	};
 }
 
+=head2 _listener_stop
+
+Called when a listener has stopped. This will remove the associated cleanup task.
+
+=cut
+
 sub _listener_stop {
 	my ($self, $ev, $ctag) = @_;
-	# warn "No longer need to clean up $ctag listener\n" if DEBUG;
 	delete $self->{cleanup}{"listener-$ctag"};
 }
 
 =head2 queue_declare
+
+Override the usual queue declaration to ensure that we attach the wrapped channel
+object (ourselves) rather than a raw L<Net::Async::AMQP::Channel> instance.
 
 =cut
 
@@ -87,6 +113,37 @@ sub queue_declare {
 		}
 	)
 }
+
+=head2 confirm_mode
+
+Don't allow this. If we want a confirm-mode-channel, it has to be assigned by passing
+the appropriate request to the connection manager.
+
+Without this we run the risk of burning through channels, for example:
+
+=over 4
+
+=item * Assign a channel with no options
+
+=item * Enable confirm mode on that channel
+
+=item * Release the channel
+
+=item * Repeat
+
+=back
+
+This would eventually cause all available channels to end up in the "confirm mode"
+available pool.
+
+=cut
+
+sub confirm_mode {
+	my ($self) = @_;
+	die "Cannot apply confirm mode to an existing channel";
+}
+
+sub last_call { shift->{last_call} }
 
 =head2 channel
 
@@ -108,7 +165,7 @@ sub manager { shift->{manager} }
 
 String representation of the channel object.
 
-Takes the form "Channel[N]", where N is the ID.
+Takes the form "ManagedChannel[N]", where N is the ID.
 
 =cut
 
@@ -129,21 +186,24 @@ any trailing consumers, for example. These are held in the cleanup hash.
 
 sub DESTROY {
 	my $self = shift;
+	return if ${^GLOBAL_PHASE} eq 'DESTRUCT';
+
 	unless($self->{cleanup}) {
-#		warn "Releasing $self without cleanup\n";
 		my $conman = delete $self->{manager};
 		my $ch = delete $self->{channel};
 		return unless $conman; # global destruct
 		return $conman->release_channel($ch);
 	}
 
-#	warn "Releasing $self\n";
 	my $f;
+	my $cleanup = delete $self->{cleanup};
 	$f = (
 		fmap_void {
-			$_ ? $_->($self) : Future->wrap
+			my $k = shift;
+			my $task = delete $cleanup->{$k};
+			$task ? $task->($self) : Future->wrap
 		} foreach => [
-			sort values %{$self->{cleanup}}
+			sort keys %$cleanup
 		]
 	)->on_ready(sub {
 		my $conman = delete $self->{manager};
@@ -162,12 +222,15 @@ All other methods are proxied to the underlying L<Net::Async::AMQP::Channel>.
 sub AUTOLOAD {
 	my ($self, @args) = @_;
 	(my $method = our $AUTOLOAD) =~ s/.*:://;
+
 	# We could check for existence first, but we wouldn't store the resulting coderef anyway,
 	# so might as well just allow the method call to fail normally (we have no idea what
 	# subclasses are used for $self->channel, using the first one we find would not be very nice)
 	# die "attempt to proxy unknown method $method for $self" unless $self->channel->can($method);
+
 	my $code = sub {
 		my $self = shift;
+		$self->{last_call} = Time::HiRes::time;
 		$self->channel->$method(@_);
 	};
 	{ no strict 'refs'; *$method = $code }

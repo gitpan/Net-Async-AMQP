@@ -1,18 +1,28 @@
 package Net::Async::AMQP::Server;
-$Net::Async::AMQP::Server::VERSION = '0.012';
+$Net::Async::AMQP::Server::VERSION = '0.013';
 use strict;
 use warnings;
 
 use parent qw(IO::Async::Listener);
 
+=head1 NAME
+
+Net::Async::AMQP::Server
+
+=head1 VERSION
+
+version 0.013
+
+=head1 SYNOPSIS
+
+=head1 DESCRIPTION
+
+=cut
+
 use curry;
 use IO::Socket::IP;
 
 use Net::Async::AMQP::Server::Connection;
-
-=pod
-
-=cut
 
 =head2 configure
 
@@ -22,7 +32,9 @@ Takes the following named parameters:
 
 =over 4
 
-=item *
+=item * local_host
+
+=item * port
 
 =back
 
@@ -61,6 +73,10 @@ sub listening {
 	$self->{listening} ||= $self->loop->new_future
 }
 
+=head2 notifier_name
+
+=cut
+
 sub notifier_name {
 	my $self = shift;
 	'NaAMQPServer=' . join ':', $self->local_host, $self->port
@@ -83,6 +99,10 @@ sub on_listen {
 	)
 }
 
+=head2 _add_to_loop
+
+=cut
+
 sub _add_to_loop {
 	my ($self, $loop) = @_;
 	$self->SUPER::_add_to_loop($loop);
@@ -100,9 +120,18 @@ sub _add_to_loop {
 	)
 }
 
+=head2 on_accept
+
+=cut
+
 sub on_accept {
 	my ($self, $sock) = @_;
-	$self->debug_printf("Incoming: $sock");
+	{
+		my $host = $sock->peerhost;
+		my $port = $sock->peerport;
+		$self->debug_printf("New connection from %s:%d", $host, $port);
+	}
+
 	my $stream = Net::Async::AMQP::Server::Connection->new(
 		handle => $sock,
 	);
@@ -111,3 +140,16 @@ sub on_accept {
 
 1;
 
+__END__
+
+=head1 AUTHOR
+
+Tom Molesworth <cpan@perlsite.co.uk>
+
+=head1 LICENSE
+
+Licensed under the same terms as Perl itself, with additional licensing
+terms for the MQ spec to be found in C<share/amqp0-9-1.extended.xml>
+('a worldwide, perpetual, royalty-free, nontransferable, nonexclusive
+license to (i) copy, display, distribute and implement the Advanced
+Messaging Queue Protocol ("AMQP") Specification').

@@ -1,35 +1,67 @@
 package Net::Async::AMQP::Server::Protocol;
-$Net::Async::AMQP::Server::Protocol::VERSION = '0.012';
+$Net::Async::AMQP::Server::Protocol::VERSION = '0.013';
 use strict;
 use warnings;
 
-use parent qw(IO::Async::Notifier);
+=head1 NAME
 
-sub new { my ($class) = shift; bless { @_ }, $class }
+Net::Async::AMQP::Server::Protocol
 
-# use parent qw(Net::Async::AMQP);
+=head1 VERSION
+
+version 0.013
+
+=head1 SYNOPSIS
+
+=head1 DESCRIPTION
+
+=cut
+
+use curry;
+use Net::Async::AMQP::Utils qw(amqp_frame_type);
+
+=head2 new
+
+=cut
+
+sub new {
+	my $class = shift;
+	my $self = bless { @_ }, $class;
+}
+
+=head2 write
+
+=cut
 
 sub write { my $self = shift; $self->{write}->(@_) }
+
+=head2 on_read
+
+=cut
 
 sub on_read {
 	my ($self, $buffer, $eof) = @_;
 	return 0 unless length $$buffer >= length Net::AMQP::Protocol->header;
+
 	$self->{initial_header} = substr $$buffer, 0, length Net::AMQP::Protocol->header, '';
 	my ($proto, $version) = $self->{initial_header} =~ /^(AMQP)(....)/ or die "Invalid header received: " . sprintf "%v02x", $self->{initial_header};
 	$self->debug_printf("Protocol $proto, version " . join '.', sprintf '%08x', unpack 'N1', $version);
-	$self->curry::weak::startup;
+	$self->can('startup');
 }
 
+=head2 startup
+
+=cut
+
 sub startup {
-	my ($self, $stream, $buffer, $eof) = @_;
-	$self->debug_printf("In startup: @_");
+	my ($self, $buffer, $eof) = @_;
 	my $frame = Net::AMQP::Frame::Method->new(
 		channel => 0,
 		method_frame => Net::AMQP::Protocol::Connection::Start->new(
 			server_properties => {
 			},
-			mechanisms        => 'AMQPLAIN',
-			locale            => 'en_GB',
+			mechanisms        => $self->auth_mechanisms,
+			locale            => $self->locale,
 		),
 	);
     $frame = $frame->frame_wrap if $frame->isa("Net::AMQP::Protocol::Base");
@@ -39,8 +71,16 @@ sub startup {
         'Connection::StartOk' => $self->can('start_ok'),
         'Connection::Close'   => $self->can('conn_close'),
 	);
-	$self->curry::weak::conn_start;
+	$self->can('conn_start');
 }
+
+sub auth_mechanisms { 'AMQPLAIN' }
+
+sub locale { 'en_GB' }
+
+=head2 push_pending
+
+=cut
 
 sub push_pending {
     my $self = shift;
@@ -50,6 +90,11 @@ sub push_pending {
     }
     return $self;
 }
+
+=head2 remove_pending
+
+=cut
+
 sub remove_pending {
 	my $self = shift;
     while(@_) {
@@ -65,6 +110,11 @@ sub remove_pending {
     }
     return $self;
 }
+
+=head2 next_pending
+
+=cut
+
 sub next_pending {
     my ($self, $type, $frame) = @_;
     $self->debug_printf("Check next pending for %s", $type);
@@ -92,13 +142,17 @@ sub next_pending {
     $self
 }
 
+=head2 process_frame
+
+=cut
+
 sub process_frame {
     my ($self, $frame) = @_;
 #	if(my $ch = $self->channel_by_id($frame->channel)) {
 #		return $self if $ch->next_pending($frame);
 #	}
 
-    my $frame_type = $self->get_frame_type($frame);
+    my $frame_type = amqp_frame_type($frame);
 
 	# Basic::Deliver - we're delivering a message to a ctag
 	# Frame::Header - header part of message
@@ -121,11 +175,14 @@ sub process_frame {
     return $self;
 }
 
-
 use Data::Dumper;
 
+=head2 conn_start
+
+=cut
+
 sub conn_start {
-	my ($self, $stream, $buffer, $eof) = @_;
+	my ($self, $buffer, $eof) = @_;
 	$self->debug_printf("Have " . length($$buffer) . " bytes of post-connect data");
 	for my $frame (Net::AMQP->parse_raw_frames($buffer)) {
 		$self->debug_printf(":: Frame $frame" . Dumper($frame));
@@ -133,6 +190,10 @@ sub conn_start {
 	}
 	0;
 }
+
+=head2 start_ok
+
+=cut
 
 sub start_ok {
 	my ($self, $frame) = @_;
@@ -153,7 +214,15 @@ sub start_ok {
 	);
 }
 
+=head2 heartbeat_interval
+
+=cut
+
 sub heartbeat_interval { shift->{heartbeat_interval} //= 0 }
+
+=head2 send_frame
+
+=cut
 
 sub send_frame {
     my $self = shift;
@@ -163,16 +232,23 @@ sub send_frame {
     # Apply defaults and wrap as required
     $frame = $frame->frame_wrap if $frame->isa("Net::AMQP::Protocol::Base");
     $frame->channel($args{channel} // 0) unless defined $frame->channel;
-#    warn "Sending frame " . Dumper($frame) if DEBUG;
 
     # Get bytes to send across our transport
     my $data = $frame->to_raw_frame;
-
-#    warn "Sending data: " . Dumper($frame) . "\n";
     $self->write($data);
+
     $self;
 }
+
+=head2 bus
+
+=cut
+
 sub bus { $_[0]->{bus} ||= Mixin::Event::Dispatch::Bus->new }
+
+=head2 frame_max
+
+=cut
 
 sub frame_max {
     my $self = shift;
@@ -181,6 +257,11 @@ sub frame_max {
     $self->{frame_max} = shift;
     $self
 }
+
+=head2 tune_ok
+
+=cut
+
 sub tune_ok {
 	my ($self, $frame) = @_;
 	$self->debug_printf("Tune okay:");
@@ -188,6 +269,18 @@ sub tune_ok {
 	$self->debug_printf("Channels:  " . $method_frame->channel_max);
 	$self->debug_printf("Max size:  " . $method_frame->frame_max);
 	$self->debug_printf("Heartbeat: " . $method_frame->heartbeat);
+    $self->push_pending(
+        'Connection::Open' => $self->can('connection_open'),
+        # 'Channel::Open' => $self->can('channel_open'),
+	);
+}
+
+=head2 connection_open
+
+=cut
+
+sub connection_open {
+	my ($self, $frame) = @_;
     $self->push_pending(
         'Channel::Open' => $self->can('channel_open'),
 	);
@@ -197,6 +290,10 @@ sub tune_ok {
 		)
 	);
 }
+
+=head2 channel_open
+
+=cut
 
 sub channel_open {
 	my ($self, $frame) = @_;
@@ -215,36 +312,23 @@ sub channel_open {
 		);
 
 	}
+
+	{
+		my $frame = Net::AMQP::Frame::Method->new(
+			channel => $id,
+			method_frame => Net::AMQP::Protocol::Channel::OpenOk->new(
+				reserved_1 => '',
+			)
+		);
+		$self->send_frame(
+			$frame
+		);
+	}
 }
 
-=head2 get_frame_type
-
-Takes the following parameters:
-
-=over 4
-
-=item * $frame - the L<Net::AMQP::Frame> instance
-
-=back
-
-Returns string representing type, typically the base class with Net::AMQP::Protocol prefix removed.
+=head2 conn_close
 
 =cut
-
-{ # We cache the lookups since they're unlikely to change during the application lifecycle
-my %types;
-sub get_frame_type {
-    my $self = shift;
-    my $frame = shift->method_frame;
-    my $ref = ref $frame;
-    return $types{$ref} if exists $types{$ref};
-    my $re = qr/^Net::AMQP::Protocol::([^:]+::[^:]+)$/;
-    my ($frame_type) = grep /$re/, Class::ISA::self_and_super_path($ref);
-    ($frame_type) = $frame_type =~ $re;
-    $types{$ref} = $frame_type;
-    return $frame_type;
-}
-}
 
 sub conn_close {
 	my ($self, $frame) = @_;
@@ -260,4 +344,30 @@ sub conn_close {
 	);
 }
 
+=head2 debug_printf
+
+=cut
+
+sub debug_printf {
+	my ($self, $fmt, @args) = @_;
+	# strip CR/LF/FF
+	$fmt =~ s/\v+/ /g;
+	# warn sprintf "$fmt\n" => @args;
+	$self
+}
+
 1;
+
+__END__
+
+=head1 AUTHOR
+
+Tom Molesworth <cpan@perlsite.co.uk>
+
+=head1 LICENSE
+
+Licensed under the same terms as Perl itself, with additional licensing
+terms for the MQ spec to be found in C<share/amqp0-9-1.extended.xml>
+('a worldwide, perpetual, royalty-free, nontransferable, nonexclusive
+license to (i) copy, display, distribute and implement the Advanced
+Messaging Queue Protocol ("AMQP") Specification').

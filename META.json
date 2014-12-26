@@ -56,6 +56,7 @@
             "IPC::Open3" : "0",
             "Test::CheckDeps" : "0.010",
             "Test::Fatal" : "0.010",
+            "Test::HexString" : "0",
             "Test::MemoryGrowth" : "0",
             "Test::More" : "0.98",
             "Test::Refcount" : "0.07"
@@ -70,6 +71,6 @@
       },
       "homepage" : "http://search.cpan.org/dist/Net-Async-AMQP/"
    },
-   "version" : "0.015"
+   "version" : "0.016"
 }
 

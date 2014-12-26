@@ -16,7 +16,7 @@ Net::Async::AMQP - provides client interface to AMQP using L<IO::Async>
 
 =head1 VERSION
 
-version 0.014
+version 0.015
 
 =head1 SYNOPSIS
 
@@ -51,16 +51,6 @@ Cancels the given consumer.
 =head2 delete
 
 Deletes this queue.
-
-=head1 SEE ALSO
-
-=over 4
-
-=item * L<Net::AMQP>
-
-=item * L<AnyEvent::RabbitMQ>
-
-=back
 
 =head1 INHERITED METHODS
 

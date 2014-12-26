@@ -16,7 +16,7 @@ Net::Async::AMQP - provides client interface to AMQP using L<IO::Async>
 
 =head1 VERSION
 
-version 0.014
+version 0.015
 
 =head1 SYNOPSIS
 
@@ -28,9 +28,7 @@ version 0.014
    host => 'localhost',
    user => 'guest',
    pass => 'guest',
-   on_connected => sub { ... }
- );
- $loop->run;
+ )->get;
 
 =head1 DESCRIPTION
 
@@ -40,6 +38,52 @@ something that has been around for longer.
 
 If you want a higher-level API which manages channels and connections, try
 L<Net::Async::AMQP::ConnectionManager>.
+
+=head2 AMQP support
+
+The following AMQP features are supported:
+
+=over 4
+
+=item * Queue declare, bind, delete
+
+=item * Exchange declare, delete
+
+=item * Consumer setup and cancellation
+
+=item * Message publishing
+
+=item * Explicit ACK
+
+=item * QoS
+
+=back
+
+=head2 RabbitMQ-specific features
+
+RabbitMQ provides some additional features:
+
+=over 4
+
+=item * Exchange-to-exchange binding
+
+=item * Server flow control notification
+
+=item * Consumer cancellation notification
+
+=back
+
+=head2 Missing features
+
+=over 4
+
+=item * Transactions
+
+=item * Flow control
+
+=item * SASL auth
+
+=back
 
 =head1 CONSTANTS
 
@@ -63,11 +107,6 @@ frame limit will be negotiated with the remote server. Defaults to 262144.
 Maximum number of channels to request. Defaults to the AMQP limit (65535).
 Attempting to set this any higher will not end well, it's an unsigned 16-bit
 value.
-
-=head2 DEBUG
-
-Debugging flag - set C<PERL_AMQP_DEBUG> to 1 in the environment to enable
-informational messages to STDERR.
 
 =head2 HEARTBEAT_INTERVAL
 
@@ -99,7 +138,7 @@ Once loaded, this module will not attempt to apply the spec again.
 =head1 %CONNECTION_DEFAULTS
 
 The default parameters to use for L</connect>. Changing these values is permitted,
-but do not attempt to delete or add any entries from the hash.
+but do not attempt to delete from or add any entries to the hash.
 
 Passing parameters directly to L</connect> is much safer, please do that instead.
 
@@ -140,10 +179,6 @@ Takes the following parameters:
 =item * user - which user to connect as, defaults to guest
 
 =item * pass - the password for this user, defaults to guest
-
-=item * on_connected - callback for when we establish a connection
-
-=item * on_error - callback for any errors encountered during connection
 
 =back
 
@@ -380,6 +415,40 @@ Takes the $payload as a scalar containing byte data, and the following parameter
 =item * exchange - where we're sending the message
 
 =item * routing_key - other part of message destination
+
+=back
+
+Additionally, the following headers can be passed:
+
+=over 4
+
+=item * content_type
+
+=item * content_encoding
+
+=item * headers
+
+=item * delivery_mode
+
+=item * priority
+
+=item * correlation_id
+
+=item * reply_to
+
+=item * expiration
+
+=item * message_id
+
+=item * timestamp
+
+=item * type
+
+=item * user_id
+
+=item * app_id
+
+=item * cluster_id
 
 =back
 

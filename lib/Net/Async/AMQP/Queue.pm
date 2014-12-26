@@ -1,5 +1,5 @@
 package Net::Async::AMQP::Queue;
-$Net::Async::AMQP::Queue::VERSION = '0.014';
+$Net::Async::AMQP::Queue::VERSION = '0.015';
 use strict;
 use warnings;
 
@@ -11,7 +11,7 @@ Net::Async::AMQP - provides client interface to AMQP using L<IO::Async>
 
 =head1 VERSION
 
-version 0.014
+version 0.015
 
 =head1 SYNOPSIS
 
@@ -239,16 +239,6 @@ sub delete : method {
 1;
 
 __END__
-
-=head1 SEE ALSO
-
-=over 4
-
-=item * L<Net::AMQP>
-
-=item * L<AnyEvent::RabbitMQ>
-
-=back
 
 =head1 AUTHOR
 

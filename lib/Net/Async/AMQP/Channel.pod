@@ -16,7 +16,7 @@ Net::Async::AMQP::Channel - represents a single channel in an MQ connection
 
 =head1 VERSION
 
-version 0.014
+version 0.015
 
 =head1 SYNOPSIS
 
@@ -78,6 +78,10 @@ channel once complete.
   type       => 'fanout',
   autodelete => 1,
  ) ==> $ch
+
+=head2 exchange_bind
+
+Binds an exchange to another exchange. This is a RabbitMQ-specific extension.
 
 =head2 queue_declare
 

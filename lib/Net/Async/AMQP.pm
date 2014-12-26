@@ -5,7 +5,7 @@ use warnings;
 
 use parent qw(IO::Async::Notifier);
 
-our $VERSION = '0.014';
+our $VERSION = '0.015';
 
 =head1 NAME
 
@@ -13,7 +13,7 @@ Net::Async::AMQP - provides client interface to AMQP using L<IO::Async>
 
 =head1 VERSION
 
-version 0.014
+version 0.015
 
 =head1 SYNOPSIS
 
@@ -25,9 +25,7 @@ version 0.014
    host => 'localhost',
    user => 'guest',
    pass => 'guest',
-   on_connected => sub { ... }
- );
- $loop->run;
+ )->get;
 
 =head1 DESCRIPTION
 
@@ -37,6 +35,52 @@ something that has been around for longer.
 
 If you want a higher-level API which manages channels and connections, try
 L<Net::Async::AMQP::ConnectionManager>.
+
+=head2 AMQP support
+
+The following AMQP features are supported:
+
+=over 4
+
+=item * Queue declare, bind, delete
+
+=item * Exchange declare, delete
+
+=item * Consumer setup and cancellation
+
+=item * Message publishing
+
+=item * Explicit ACK
+
+=item * QoS
+
+=back
+
+=head2 RabbitMQ-specific features
+
+RabbitMQ provides some additional features:
+
+=over 4
+
+=item * Exchange-to-exchange binding
+
+=item * Server flow control notification
+
+=item * Consumer cancellation notification
+
+=back
+
+=head2 Missing features
+
+=over 4
+
+=item * Transactions
+
+=item * Flow control
+
+=item * SASL auth
+
+=back
 
 =cut
 
@@ -92,15 +136,6 @@ value.
 
 use constant MAX_CHANNELS          => 65535;
 
-=head2 DEBUG
-
-Debugging flag - set C<PERL_AMQP_DEBUG> to 1 in the environment to enable
-informational messages to STDERR.
-
-=cut
-
-use constant DEBUG                 => $ENV{PERL_AMQP_DEBUG} // 0;
-
 =head2 HEARTBEAT_INTERVAL
 
 Interval in seconds between heartbeat frames, zero to disable. Can be
@@ -154,7 +189,7 @@ BEGIN {
 =head1 %CONNECTION_DEFAULTS
 
 The default parameters to use for L</connect>. Changing these values is permitted,
-but do not attempt to delete or add any entries from the hash.
+but do not attempt to delete from or add any entries to the hash.
 
 Passing parameters directly to L</connect> is much safer, please do that instead.
 
@@ -220,10 +255,6 @@ Takes the following parameters:
 =item * user - which user to connect as, defaults to guest
 
 =item * pass - the password for this user, defaults to guest
-
-=item * on_connected - callback for when we establish a connection
-
-=item * on_error - callback for any errors encountered during connection
 
 =back
 
@@ -1035,14 +1066,11 @@ sub process_frame {
 
 		# A peer that receives an invalid heartbeat frame MUST raise a connection
 		# exception with reply code 501 (frame error)
-		$self->send_frame(
-			Net::AMQP::Frame::Method->new(
-				method_frame => Net::AMQP::Protocol::Connection::Close->new(
-					reply_code => 501,
-					reply_text => 'Frame error - heartbeat should have channel 0'
-				)
-			)
+		$self->close(
+			reply_code => 501,
+			reply_text => 'Frame error - heartbeat should have channel 0'
 		) if $frame->channel;
+
 		return $self;
 	} elsif(my $ch = $self->channel_by_id($frame->channel)) {
 		$self->debug_printf("Processing frame %s on channel %d", $frame_type, $ch);
@@ -1067,6 +1095,40 @@ Takes the $payload as a scalar containing byte data, and the following parameter
 =item * exchange - where we're sending the message
 
 =item * routing_key - other part of message destination
+
+=back
+
+Additionally, the following headers can be passed:
+
+=over 4
+
+=item * content_type
+
+=item * content_encoding
+
+=item * headers
+
+=item * delivery_mode
+
+=item * priority
+
+=item * correlation_id
+
+=item * reply_to
+
+=item * expiration
+
+=item * message_id
+
+=item * timestamp
+
+=item * type
+
+=item * user_id
+
+=item * app_id
+
+=item * cluster_id
 
 =back
 
@@ -1146,7 +1208,6 @@ sub send_frame {
 		if defined $frame->channel && defined $args{channel} && $frame->channel != $args{channel};
 
 	$frame->channel($args{channel} // 0) unless defined $frame->channel;
-#    warn "Sending frame " . Dumper($frame) if DEBUG;
 
 	# Get bytes to send across our transport
 	my $data = $frame->to_raw_frame;

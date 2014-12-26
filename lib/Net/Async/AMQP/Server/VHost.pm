@@ -1,5 +1,5 @@
 package Net::Async::AMQP::Server::VHost;
-$Net::Async::AMQP::Server::VHost::VERSION = '0.014';
+$Net::Async::AMQP::Server::VHost::VERSION = '0.015';
 use strict;
 use warnings;
 

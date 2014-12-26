@@ -1,5 +1,5 @@
 package Net::Async::AMQP::Channel;
-$Net::Async::AMQP::Channel::VERSION = '0.014';
+$Net::Async::AMQP::Channel::VERSION = '0.015';
 use strict;
 use warnings;
 
@@ -11,7 +11,7 @@ Net::Async::AMQP::Channel - represents a single channel in an MQ connection
 
 =head1 VERSION
 
-version 0.014
+version 0.015
 
 =head1 SYNOPSIS
 
@@ -150,6 +150,37 @@ sub exchange_declare {
 	);
 	$self->push_pending(
 		'Exchange::DeclareOk' => [ $f, $self ]
+	);
+	$self->closure_protection($f);
+	$self->send_frame($frame);
+	return $f;
+}
+
+=head2 exchange_bind
+
+Binds an exchange to another exchange. This is a RabbitMQ-specific extension.
+
+=cut
+
+sub exchange_bind {
+    my $self = shift;
+    my %args = @_;
+    die "No source exchange specified" unless exists $args{source};
+    die "No destination exchange specified" unless exists $args{destination};
+
+	$self->debug_printf("Binding exchange [%s] to [%s] with rkey [%s]", $args{source}, $args{destination}, $args{routing_key});
+
+	my $f = $self->loop->new_future;
+	my $frame = Net::AMQP::Frame::Method->new(
+		method_frame => Net::AMQP::Protocol::Exchange::Bind->new(
+			source      => Net::AMQP::Value::String->new($args{source}),
+			destination => Net::AMQP::Value::String->new($args{destination}),
+			(exists($args{routing_key}) ? ('routing_key' => Net::AMQP::Value::String->new($args{routing_key})) : ()),
+			nowait      => 0,
+		)
+	);
+	$self->push_pending(
+		'Exchange::BindOk' => [ $f, $self ]
 	);
 	$self->closure_protection($f);
 	$self->send_frame($frame);

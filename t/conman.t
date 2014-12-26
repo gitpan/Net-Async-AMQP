@@ -86,6 +86,75 @@ $cm->request_channel->then(sub {
 	is($cm->connection_count, 3, 'still 3 connections after assigning a full connection');
 }
 
+{ # Exchange-to-exchange binding
+	$cm->request_channel(
+		confirm_mode => 1,
+	)->then(sub {
+		my ($ch) = @_;
+		my $delivery = $loop->new_future;
+		note 'Declaring queue and two exchanges';
+		Future->needs_all(
+			$ch->queue_declare(
+				queue => '',
+			),
+			$ch->exchange_declare(
+				exchange => 'test_source',
+				type     => 'fanout',
+			),
+			$ch->exchange_declare(
+				exchange => 'test_destination',
+				type     => 'fanout',
+			),
+		)->then(sub {
+			my ($q) = @_;
+			note 'Binding queue and exchanges';
+			Future->needs_all(
+				$q->bind_exchange(
+					exchange => 'test_destination',
+					routing_key => '#',
+				),
+				$ch->exchange_bind(
+					source      => 'test_source',
+					destination => 'test_destination',
+					routing_key => '#',
+				),
+			)
+		})->then(sub {
+			my ($q) = @_;
+			note 'Starting queue consumer';
+			$q->listen
+		})->then(sub {
+			my ($q, $ctag) = @_;
+			note 'ctag is ' . $ctag;
+			$ch->bus->subscribe_to_event(
+				message => sub {
+					my ($ev, $type, $payload, $ctag) = @_;
+					note "Had message: $type, $payload";
+					$delivery->done($type => $payload);
+				}
+			);
+			$ch->publish(
+				exchange    => 'test_source',
+				routing_key => 'xxx',
+				type        => 'some_type',
+				payload     => 'test message',
+			)->transform(done => sub { $q })
+		})->then(sub {
+			my ($q) = @_;
+			note 'Published message';
+			Future->wait_any(
+				$loop->timeout_future(after => 10),
+				$delivery
+			)
+		})->then(sub {
+			ok($delivery->is_ready, 'delivery ready');
+			ok(!$delivery->failure, 'did not fail');
+			is_deeply([ $delivery->get ], [ 'some_type' => 'test message' ], 'had expected type and content');
+			Future->wrap;
+		})
+	})->get
+}
+
 $cm->shutdown->get;
 
 done_testing;

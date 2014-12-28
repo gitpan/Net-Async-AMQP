@@ -1,5 +1,5 @@
 package Net::Async::AMQP::Utils;
-$Net::Async::AMQP::Utils::VERSION = '0.016';
+$Net::Async::AMQP::Utils::VERSION = '0.017';
 use strict;
 use warnings;
 
@@ -35,6 +35,7 @@ Returns a string with information about the given AMQP frame.
 sub amqp_frame_info($) {
 	my ($frame) = @_;
 	my $txt = amqp_frame_type($frame);
+	$txt .= ', channel ' . $frame->channel if $frame->channel;
 	if($frame->can('method_frame') && (my $method_frame = $frame->method_frame)) {
 		#note($_);
 	} else {

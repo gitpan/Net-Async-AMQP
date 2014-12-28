@@ -192,10 +192,6 @@ The parent L<Net::Async::AMQP> instance.
 
 Event bus. Used for sharing channel-specific events.
 
-=head2 write
-
-Proxy a write operation through the parent L<Net::Async::AMQP> instance.
-
 =head2 future
 
 The underlying L<Future> for this channel which

@@ -38,4 +38,4 @@ requires:
 resources:
   bugtracker: http://rt.cpan.org/Public/Dist/Display.html?Name=Net-Async-AMQP
   homepage: http://search.cpan.org/dist/Net-Async-AMQP/
-version: '0.016'
+version: '0.017'

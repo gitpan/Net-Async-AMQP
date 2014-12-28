@@ -1,5 +1,5 @@
 package Net::Async::AMQP::Queue;
-$Net::Async::AMQP::Queue::VERSION = '0.016';
+$Net::Async::AMQP::Queue::VERSION = '0.017';
 use strict;
 use warnings;
 
@@ -93,7 +93,7 @@ sub listen {
     my %args = @_;
 
     # Attempt to bind after we've successfully declared the exchange.
-    $self->future->then(sub {
+    my $f = $self->future->then(sub {
         my $f = $self->loop->new_future;
         $self->debug_printf("Attempting to listen for events on queue [%s]", $self->queue_name);
 
@@ -138,6 +138,8 @@ sub listen {
         $self->send_frame($frame);
         $f;
     });
+	$self->adopt_future($f->else_done);
+	$f
 }
 
 =head2 cancel
@@ -150,13 +152,9 @@ sub cancel {
     my $self = shift;
     my %args = @_;
 
-	my $f = $self->loop->new_future;
-    $self->adopt_future(
-		$f->else(sub { Future->wrap })
-	);
-
     # Attempt to bind after we've successfully declared the exchange.
-	$self->future->then(sub {
+	my $f = $self->future->then(sub {
+		my $f = $self->loop->new_future;
 		$self->debug_printf("Attempting to cancel consumer [%s]", $args{consumer_tag});
 
 		my $frame = Net::AMQP::Protocol::Basic::Cancel->new(
@@ -177,6 +175,8 @@ sub cancel {
 		$self->send_frame($frame);
 		$f;
 	});
+    $self->adopt_future($f->else_done);
+	$f
 }
 
 sub bind_exchange {
@@ -185,26 +185,28 @@ sub bind_exchange {
     die "No exchange specified" unless exists $args{exchange};
 
     # Attempt to bind after we've successfully declared the exchange.
-    $self->future->then(sub {
-        my $f = $self->loop->new_future;
-        $self->debug_printf("Binding queue [%s] to exchange [%s] with rkey [%s]", $self->queue_name, $args{exchange}, $args{routing_key} // '(none)');
+	my $f = $self->future->then(sub {
+		my $f = $self->loop->new_future;
+		$self->debug_printf("Binding queue [%s] to exchange [%s] with rkey [%s]", $self->queue_name, $args{exchange}, $args{routing_key} // '(none)');
 
-        my $frame = Net::AMQP::Frame::Method->new(
-            method_frame => Net::AMQP::Protocol::Queue::Bind->new(
-                queue       => Net::AMQP::Value::String->new($self->queue_name),
-                exchange    => Net::AMQP::Value::String->new($args{exchange}),
-                (exists($args{routing_key}) ? ('routing_key' => Net::AMQP::Value::String->new($args{routing_key})) : ()),
-                ticket      => 0,
-                nowait      => 0,
-            )
-        );
-        $self->push_pending(
-            'Queue::BindOk' => [ $f, $self ],
-        );
+		my $frame = Net::AMQP::Frame::Method->new(
+			method_frame => Net::AMQP::Protocol::Queue::Bind->new(
+				queue       => Net::AMQP::Value::String->new($self->queue_name),
+				exchange    => Net::AMQP::Value::String->new($args{exchange}),
+				(exists($args{routing_key}) ? ('routing_key' => Net::AMQP::Value::String->new($args{routing_key})) : ()),
+				ticket      => 0,
+				nowait      => 0,
+			)
+		);
+		$self->push_pending(
+			'Queue::BindOk' => [ $f, $self ],
+		);
 		$self->closure_protection($f);
-        $self->send_frame($frame);
-        $f
-    });
+		$self->send_frame($frame);
+		$f
+	});
+	$self->adopt_future($f->else_done);
+	$f
 }
 
 =head2 delete
@@ -217,23 +219,25 @@ sub delete : method {
     my $self = shift;
     my %args = @_;
 
-    $self->future->then(sub {
-        my $f = $self->loop->new_future;
-        $self->debug_printf("Deleting queue [%s]", $self->queue_name);
+	my $f = $self->future->then(sub {
+		my $f = $self->loop->new_future;
+		$self->debug_printf("Deleting queue [%s]", $self->queue_name);
 
-        my $frame = Net::AMQP::Frame::Method->new(
-            method_frame => Net::AMQP::Protocol::Queue::Delete->new(
-                queue       => Net::AMQP::Value::String->new($self->queue_name),
-                nowait      => 0,
-            )
-        );
-        $self->push_pending(
-            'Queue::DeleteOk' => [ $f, $self ],
-        );
+		my $frame = Net::AMQP::Frame::Method->new(
+			method_frame => Net::AMQP::Protocol::Queue::Delete->new(
+				queue       => Net::AMQP::Value::String->new($self->queue_name),
+				nowait      => 0,
+			)
+		);
+		$self->push_pending(
+			'Queue::DeleteOk' => [ $f, $self ],
+		);
 		$self->closure_protection($f);
-        $self->send_frame($frame);
-        $f
-    });
+		$self->send_frame($frame);
+		$f
+	});
+	$self->adopt_future($f->else_done);
+	$f
 }
 
 1;

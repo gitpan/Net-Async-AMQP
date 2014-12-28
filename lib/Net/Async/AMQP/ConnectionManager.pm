@@ -1,5 +1,5 @@
 package Net::Async::AMQP::ConnectionManager;
-$Net::Async::AMQP::ConnectionManager::VERSION = '0.016';
+$Net::Async::AMQP::ConnectionManager::VERSION = '0.017';
 use strict;
 use warnings;
 
@@ -156,7 +156,7 @@ sub request_channel {
 	# so whichever means we use to obtain a channel will need to set QoS afterwards
 	my $f;
 
-	if(exists $self->{closed_channel} && @{$self->{closed_channel}}) {
+	if($self->can_reopen_channels && exists $self->{closed_channel} && @{$self->{closed_channel}}) {
 		# If we have an ID for a closed channel then reuse that first.
 		my ($mq, $id) = @{shift @{$self->{closed_channel}}};
 		$self->debug_printf("Reopening closed channel %d", $id);
@@ -213,6 +213,8 @@ sub request_channel {
 		}
 	);
 }
+
+sub can_reopen_channels { 1 }
 
 sub channel_retry_count { 3 }
 
@@ -394,6 +396,10 @@ Called when one of our channels has been closed.
 sub on_channel_close {
 	my ($self, $ch, $ev, %args) = @_;
 	$self->debug_printf("channel closure: %s", join ' ', @_);
+	# Channel closure only happens once per channel
+	$ev->unsubscribe;
+
+	$self->debug_printf("Adding closed channel %d back to the available list", $ch->id);
 	my $amqp = $ch->amqp or die "This channel (" . $ch->id . ") has no AMQP connection";
 	push @{$self->{closed_channel}}, [ $amqp, $ch->id ];
 

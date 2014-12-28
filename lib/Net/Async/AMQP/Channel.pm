@@ -1,5 +1,5 @@
 package Net::Async::AMQP::Channel;
-$Net::Async::AMQP::Channel::VERSION = '0.016';
+$Net::Async::AMQP::Channel::VERSION = '0.017';
 use strict;
 use warnings;
 
@@ -427,14 +427,28 @@ Called when the channel has been closed.
 =cut
 
 sub on_close {
-	my $self = shift;
-	my $frame = shift;
+	my ($self, $frame) = @_;
+
+	# ACK the close first - we have to send a close-ok
+	# before it's legal to reopen this channel ID
+	$self->send_frame(
+		Net::AMQP::Frame::Method->new(
+			method_frame => Net::AMQP::Protocol::Channel::CloseOk->new(
+			)
+		)
+	);
+
+	# It's important that the MQ instance knows
+	# about the channel closure first before we
+	# go ahead and dispatch events, since any
+	# subscribed handlers might go ahead and
+	# attempt to open the channel again immediately.
+	$self->amqp->channel_closed($self->id);
 	$self->bus->invoke_event(
 		'close',
 		code => $frame->reply_code,
 		message => $frame->reply_text,
 	);
-	$self->amqp->channel_closed($self->id);
 }
 
 =head2 send_frame
@@ -652,14 +666,6 @@ Event bus. Used for sharing channel-specific events.
 
 sub bus { $_[0]->{bus} ||= Mixin::Event::Dispatch::Bus->new }
 
-=head2 write
-
-Proxy a write operation through the parent L<Net::Async::AMQP> instance.
-
-=cut
-
-sub write { shift->amqp->write(@_) }
-
 =head2 future
 
 The underlying L<Future> for this channel which
@@ -693,14 +699,14 @@ sub closure_protection {
 	my @ev;
 	my $bus = $self->bus;
 	$f->on_ready(sub {
-		$bus->unsubscribe_from_event(@ev);
-		@ev = ();
+		$bus->unsubscribe_from_event(splice @ev);
+		undef $f;
 	});
 	$bus->subscribe_to_event(
 		@ev = (close => sub {
-			my ($ev, @args) = @_;
-			warn "Closed channel - @args\n";
-			$f->fail(closed => @args) unless $f->is_ready;
+			my ($ev, %args) = @_;
+			$self->debug_printf("Closed channel, code %d, reason: %s", $args{code}, $args{reason});
+			$f->fail(closed => %args) unless $f->is_ready;
 		})
 	);
 	$f

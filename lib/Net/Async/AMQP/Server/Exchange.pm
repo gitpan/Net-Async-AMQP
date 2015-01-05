@@ -1,5 +1,5 @@
 package Net::Async::AMQP::Server::Exchange;
-$Net::Async::AMQP::Server::Exchange::VERSION = '0.019';
+$Net::Async::AMQP::Server::Exchange::VERSION = '0.020';
 use strict;
 use warnings;
 
@@ -9,7 +9,7 @@ Net::Async::AMQP::Server::Exchange
 
 =head1 VERSION
 
-version 0.019
+version 0.020
 
 =head1 SYNOPSIS
 

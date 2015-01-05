@@ -16,7 +16,7 @@ Net::Async::AMQP::Channel - represents a single channel in an MQ connection
 
 =head1 VERSION
 
-version 0.019
+version 0.020
 
 =head1 SYNOPSIS
 
@@ -201,6 +201,12 @@ is open.
 =head2 id
 
 This channel ID.
+
+=head2 closure_protection
+
+Helper method for marking any outstanding requests as failed when the channel closes.
+
+Takes a L<Future>, returns a L<Future> (probably the same one).
 
 =head1 INHERITED METHODS
 

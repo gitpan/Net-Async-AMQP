@@ -1,5 +1,13 @@
 Revision history for Net-Async-AMQP
 
+0.020     2015-01-05 12:54:17+00:00 Europe/London
+	No new features.
+
+	Bugs fixed:
+	* Don't call ->on_ready on a Future that's already been cleaned up,
+	and handle cases where the Future is passed to ->closure_protection
+	in a ready state
+
 0.019     2014-12-30 11:47:16+00:00 Europe/London
 	No new features.
 

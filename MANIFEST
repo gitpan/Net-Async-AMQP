@@ -22,7 +22,6 @@ lib/Net/Async/AMQP/ConnectionManager.pod
 lib/Net/Async/AMQP/ConnectionManager/Channel.pm
 lib/Net/Async/AMQP/ConnectionManager/Connection.pm
 lib/Net/Async/AMQP/Queue.pm
-lib/Net/Async/AMQP/Queue.pod
 lib/Net/Async/AMQP/Server.pm
 lib/Net/Async/AMQP/Server.pod
 lib/Net/Async/AMQP/Server/Channel.pm

@@ -1,5 +1,5 @@
 package Net::Async::AMQP::Channel;
-$Net::Async::AMQP::Channel::VERSION = '0.020';
+$Net::Async::AMQP::Channel::VERSION = '0.021';
 use strict;
 use warnings;
 
@@ -11,7 +11,7 @@ Net::Async::AMQP::Channel - represents a single channel in an MQ connection
 
 =head1 VERSION
 
-version 0.020
+version 0.021
 
 =head1 SYNOPSIS
 
@@ -205,19 +205,11 @@ sub queue_declare {
 
 	$self->future->then(sub {
 		my $f = $self->loop->new_future;
-		$self->add_child(
-			my $q = Net::Async::AMQP::Queue->new(
-				amqp    => $self->amqp,
-				future  => $f,
-				channel => $self,
-			)
+		my $ready = $self->loop->new_future;
+		my $q = Net::Async::AMQP::Queue->new(
+			amqp    => $self->amqp,
+			future  => $ready,
 		);
-		# Avoid the cycle caused by self -> children [ queue ],
-		# but do it outside the queue object so that we
-		# can assign a different channel elsewhere without
-		# triggering cleanup logic as soon as that channel
-		# goes out of scope.
-		Scalar::Util::weaken($q->{channel});
 		$self->debug_printf("Declaring queue [%s]", $args{queue});
 		my $frame = Net::AMQP::Frame::Method->new(
 			method_frame => Net::AMQP::Protocol::Queue::Declare->new(
@@ -240,6 +232,7 @@ sub queue_declare {
 				my ($amqp, $frame) = @_;
 				my $method_frame = $frame->method_frame;
 				$q->queue_name($method_frame->queue);
+				$ready->done() unless $ready->is_ready;
 				$f->done($q) unless $f->is_ready;
 			}
 		);
